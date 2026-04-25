@@ -1,7 +1,8 @@
 -- =====================================================
--- EXAMY - COMPLETE DATABASE SETUP SQL (CLEAN INSTALL)
+-- EXAMY - COMPLETE DATABASE SETUP SQL (IDEMPOTENT)
 -- Run in Supabase SQL Editor (Dashboard > SQL Editor > New Query)
--- ⚠️  Part 0 DROPS ALL existing tables (clean slate)
+-- ✅ Safe to re-run: uses IF NOT EXISTS, DROP IF EXISTS, CREATE OR REPLACE
+-- ⚠️  Part 0 DROPS ALL existing tables (clean slate) - remove if you want to keep data
 -- =====================================================
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -52,7 +53,7 @@ DROP POLICY IF EXISTS "Students can read subject files" ON storage.objects;
 -- PART 1: USERS (no dependencies - must be first)
 -- =====================================================
 
-CREATE TABLE public.users (
+CREATE TABLE IF NOT EXISTS public.users (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   email TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
@@ -63,14 +64,14 @@ CREATE TABLE public.users (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_users_teacher_code ON public.users(teacher_code) WHERE teacher_code IS NOT NULL;
-CREATE INDEX idx_users_role ON public.users(role);
+CREATE INDEX IF NOT EXISTS idx_users_teacher_code ON public.users(teacher_code) WHERE teacher_code IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_users_role ON public.users(role);
 
 -- =====================================================
 -- PART 2: TEACHER-STUDENT LINKS (depends on: users)
 -- =====================================================
 
-CREATE TABLE public.teacher_student_links (
+CREATE TABLE IF NOT EXISTS public.teacher_student_links (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   teacher_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   student_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -78,14 +79,14 @@ CREATE TABLE public.teacher_student_links (
   UNIQUE(teacher_id, student_id)
 );
 
-CREATE INDEX idx_tsl_teacher ON public.teacher_student_links(teacher_id);
-CREATE INDEX idx_tsl_student ON public.teacher_student_links(student_id);
+CREATE INDEX IF NOT EXISTS idx_tsl_teacher ON public.teacher_student_links(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_tsl_student ON public.teacher_student_links(student_id);
 
 -- =====================================================
 -- PART 3: SUMMARIES (depends on: users)
 -- =====================================================
 
-CREATE TABLE public.summaries (
+CREATE TABLE IF NOT EXISTS public.summaries (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
@@ -94,13 +95,13 @@ CREATE TABLE public.summaries (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_summaries_user ON public.summaries(user_id);
+CREATE INDEX IF NOT EXISTS idx_summaries_user ON public.summaries(user_id);
 
 -- =====================================================
 -- PART 4: SUBJECTS (depends on: users)
 -- =====================================================
 
-CREATE TABLE public.subjects (
+CREATE TABLE IF NOT EXISTS public.subjects (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   teacher_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
@@ -111,13 +112,13 @@ CREATE TABLE public.subjects (
   updated_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 
-CREATE INDEX idx_subjects_teacher_id ON public.subjects(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_subjects_teacher_id ON public.subjects(teacher_id);
 
 -- =====================================================
 -- PART 4b: SUBJECT_TEACHERS (depends on: subjects, users)
 -- =====================================================
 
-CREATE TABLE public.subject_teachers (
+CREATE TABLE IF NOT EXISTS public.subject_teachers (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   subject_id UUID NOT NULL REFERENCES public.subjects(id) ON DELETE CASCADE,
   teacher_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -127,15 +128,15 @@ CREATE TABLE public.subject_teachers (
   UNIQUE(subject_id, teacher_id)
 );
 
-CREATE INDEX idx_subject_teachers_subject_id ON public.subject_teachers(subject_id);
-CREATE INDEX idx_subject_teachers_teacher_id ON public.subject_teachers(teacher_id);
-CREATE INDEX idx_subject_teachers_role ON public.subject_teachers(role);
+CREATE INDEX IF NOT EXISTS idx_subject_teachers_subject_id ON public.subject_teachers(subject_id);
+CREATE INDEX IF NOT EXISTS idx_subject_teachers_teacher_id ON public.subject_teachers(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_subject_teachers_role ON public.subject_teachers(role);
 
 -- =====================================================
 -- PART 5: SUBJECT_STUDENTS (depends on: subjects, users)
 -- =====================================================
 
-CREATE TABLE public.subject_students (
+CREATE TABLE IF NOT EXISTS public.subject_students (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   subject_id UUID NOT NULL REFERENCES public.subjects(id) ON DELETE CASCADE,
   student_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -143,14 +144,14 @@ CREATE TABLE public.subject_students (
   UNIQUE(subject_id, student_id)
 );
 
-CREATE INDEX idx_subject_students_subject_id ON public.subject_students(subject_id);
-CREATE INDEX idx_subject_students_student_id ON public.subject_students(student_id);
+CREATE INDEX IF NOT EXISTS idx_subject_students_subject_id ON public.subject_students(subject_id);
+CREATE INDEX IF NOT EXISTS idx_subject_students_student_id ON public.subject_students(student_id);
 
 -- =====================================================
 -- PART 6: LECTURES (depends on: subjects)
 -- =====================================================
 
-CREATE TABLE public.lectures (
+CREATE TABLE IF NOT EXISTS public.lectures (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   subject_id UUID NOT NULL REFERENCES public.subjects(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
@@ -160,13 +161,13 @@ CREATE TABLE public.lectures (
   updated_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 
-CREATE INDEX idx_lectures_subject_id ON public.lectures(subject_id);
+CREATE INDEX IF NOT EXISTS idx_lectures_subject_id ON public.lectures(subject_id);
 
 -- =====================================================
 -- PART 7: QUIZZES (depends on: users, summaries, subjects)
 -- =====================================================
 
-CREATE TABLE public.quizzes (
+CREATE TABLE IF NOT EXISTS public.quizzes (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
@@ -182,13 +183,13 @@ CREATE TABLE public.quizzes (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_quizzes_user ON public.quizzes(user_id);
+CREATE INDEX IF NOT EXISTS idx_quizzes_user ON public.quizzes(user_id);
 
 -- =====================================================
 -- PART 8: SCORES (depends on: users, quizzes)
 -- =====================================================
 
-CREATE TABLE public.scores (
+CREATE TABLE IF NOT EXISTS public.scores (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   student_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   teacher_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -200,15 +201,15 @@ CREATE TABLE public.scores (
   completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_scores_student ON public.scores(student_id);
-CREATE INDEX idx_scores_teacher ON public.scores(teacher_id);
-CREATE INDEX idx_scores_quiz ON public.scores(quiz_id);
+CREATE INDEX IF NOT EXISTS idx_scores_student ON public.scores(student_id);
+CREATE INDEX IF NOT EXISTS idx_scores_teacher ON public.scores(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_scores_quiz ON public.scores(quiz_id);
 
 -- =====================================================
 -- PART 9: LECTURE_NOTES (depends on: lectures, users)
 -- =====================================================
 
-CREATE TABLE public.lecture_notes (
+CREATE TABLE IF NOT EXISTS public.lecture_notes (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   lecture_id UUID NOT NULL REFERENCES public.lectures(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -218,14 +219,14 @@ CREATE TABLE public.lecture_notes (
   updated_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 
-CREATE INDEX idx_lecture_notes_lecture_id ON public.lecture_notes(lecture_id);
-CREATE INDEX idx_lecture_notes_user_id ON public.lecture_notes(user_id);
+CREATE INDEX IF NOT EXISTS idx_lecture_notes_lecture_id ON public.lecture_notes(lecture_id);
+CREATE INDEX IF NOT EXISTS idx_lecture_notes_user_id ON public.lecture_notes(user_id);
 
 -- =====================================================
 -- PART 10: NOTE_VIEWS (depends on: lecture_notes, users)
 -- =====================================================
 
-CREATE TABLE public.note_views (
+CREATE TABLE IF NOT EXISTS public.note_views (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   note_id UUID NOT NULL REFERENCES public.lecture_notes(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -233,14 +234,14 @@ CREATE TABLE public.note_views (
   UNIQUE(note_id, user_id)
 );
 
-CREATE INDEX idx_note_views_note_id ON public.note_views(note_id);
-CREATE INDEX idx_note_views_user_id ON public.note_views(user_id);
+CREATE INDEX IF NOT EXISTS idx_note_views_note_id ON public.note_views(note_id);
+CREATE INDEX IF NOT EXISTS idx_note_views_user_id ON public.note_views(user_id);
 
 -- =====================================================
 -- PART 11: ASSIGNMENTS (depends on: subjects, users)
 -- =====================================================
 
-CREATE TABLE public.assignments (
+CREATE TABLE IF NOT EXISTS public.assignments (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   subject_id UUID NOT NULL REFERENCES public.subjects(id) ON DELETE CASCADE,
   teacher_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -253,14 +254,14 @@ CREATE TABLE public.assignments (
   updated_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 
-CREATE INDEX idx_assignments_subject_id ON public.assignments(subject_id);
-CREATE INDEX idx_assignments_teacher_id ON public.assignments(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_assignments_subject_id ON public.assignments(subject_id);
+CREATE INDEX IF NOT EXISTS idx_assignments_teacher_id ON public.assignments(teacher_id);
 
 -- =====================================================
 -- PART 12: USER_FILES (depends on: users, assignments)
 -- =====================================================
 
-CREATE TABLE public.user_files (
+CREATE TABLE IF NOT EXISTS public.user_files (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   file_name TEXT NOT NULL,
@@ -272,14 +273,14 @@ CREATE TABLE public.user_files (
   updated_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 
-CREATE INDEX idx_user_files_user_id ON public.user_files(user_id);
-CREATE INDEX idx_user_files_assignment_id ON public.user_files(assignment_id);
+CREATE INDEX IF NOT EXISTS idx_user_files_user_id ON public.user_files(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_files_assignment_id ON public.user_files(assignment_id);
 
 -- =====================================================
 -- PART 13: FILE_SHARES (depends on: user_files, users)
 -- =====================================================
 
-CREATE TABLE public.file_shares (
+CREATE TABLE IF NOT EXISTS public.file_shares (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   file_id UUID NOT NULL REFERENCES public.user_files(id) ON DELETE CASCADE,
   shared_by UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -289,15 +290,15 @@ CREATE TABLE public.file_shares (
   UNIQUE(file_id, shared_with)
 );
 
-CREATE INDEX idx_file_shares_file_id ON public.file_shares(file_id);
-CREATE INDEX idx_file_shares_shared_by ON public.file_shares(shared_by);
-CREATE INDEX idx_file_shares_shared_with ON public.file_shares(shared_with);
+CREATE INDEX IF NOT EXISTS idx_file_shares_file_id ON public.file_shares(file_id);
+CREATE INDEX IF NOT EXISTS idx_file_shares_shared_by ON public.file_shares(shared_by);
+CREATE INDEX IF NOT EXISTS idx_file_shares_shared_with ON public.file_shares(shared_with);
 
 -- =====================================================
 -- PART 14: SUBJECT_FILES (depends on: subjects, users)
 -- =====================================================
 
-CREATE TABLE public.subject_files (
+CREATE TABLE IF NOT EXISTS public.subject_files (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   subject_id UUID NOT NULL REFERENCES public.subjects(id) ON DELETE CASCADE,
   uploaded_by UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -310,14 +311,14 @@ CREATE TABLE public.subject_files (
   created_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 
-CREATE INDEX idx_subject_files_subject_id ON public.subject_files(subject_id);
-CREATE INDEX idx_subject_files_uploaded_by ON public.subject_files(uploaded_by);
+CREATE INDEX IF NOT EXISTS idx_subject_files_subject_id ON public.subject_files(subject_id);
+CREATE INDEX IF NOT EXISTS idx_subject_files_uploaded_by ON public.subject_files(uploaded_by);
 
 -- =====================================================
 -- PART 15: SUBMISSIONS (depends on: assignments, users, user_files)
 -- =====================================================
 
-CREATE TABLE public.submissions (
+CREATE TABLE IF NOT EXISTS public.submissions (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   assignment_id UUID NOT NULL REFERENCES public.assignments(id) ON DELETE CASCADE,
   student_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -331,15 +332,15 @@ CREATE TABLE public.submissions (
   UNIQUE(assignment_id, student_id)
 );
 
-CREATE INDEX idx_submissions_assignment_id ON public.submissions(assignment_id);
-CREATE INDEX idx_submissions_student_id ON public.submissions(student_id);
-CREATE INDEX idx_submissions_status ON public.submissions(status);
+CREATE INDEX IF NOT EXISTS idx_submissions_assignment_id ON public.submissions(assignment_id);
+CREATE INDEX IF NOT EXISTS idx_submissions_student_id ON public.submissions(student_id);
+CREATE INDEX IF NOT EXISTS idx_submissions_status ON public.submissions(status);
 
 -- =====================================================
 -- PART 16: ATTENDANCE_SESSIONS (depends on: lectures, users, subjects)
 -- =====================================================
 
-CREATE TABLE public.attendance_sessions (
+CREATE TABLE IF NOT EXISTS public.attendance_sessions (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   lecture_id UUID NOT NULL REFERENCES public.lectures(id) ON DELETE CASCADE,
   teacher_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -351,19 +352,19 @@ CREATE TABLE public.attendance_sessions (
   updated_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 
-CREATE UNIQUE INDEX idx_one_active_session_per_teacher
+CREATE UNIQUE INDEX IF NOT EXISTS idx_one_active_session_per_teacher
   ON public.attendance_sessions(teacher_id) WHERE status = 'active';
 
-CREATE INDEX idx_attendance_sessions_lecture_id ON public.attendance_sessions(lecture_id);
-CREATE INDEX idx_attendance_sessions_teacher_id ON public.attendance_sessions(teacher_id);
-CREATE INDEX idx_attendance_sessions_subject_id ON public.attendance_sessions(subject_id);
-CREATE INDEX idx_attendance_sessions_status ON public.attendance_sessions(status);
+CREATE INDEX IF NOT EXISTS idx_attendance_sessions_lecture_id ON public.attendance_sessions(lecture_id);
+CREATE INDEX IF NOT EXISTS idx_attendance_sessions_teacher_id ON public.attendance_sessions(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_attendance_sessions_subject_id ON public.attendance_sessions(subject_id);
+CREATE INDEX IF NOT EXISTS idx_attendance_sessions_status ON public.attendance_sessions(status);
 
 -- =====================================================
 -- PART 17: ATTENDANCE_RECORDS (depends on: attendance_sessions, users)
 -- =====================================================
 
-CREATE TABLE public.attendance_records (
+CREATE TABLE IF NOT EXISTS public.attendance_records (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   session_id UUID NOT NULL REFERENCES public.attendance_sessions(id) ON DELETE CASCADE,
   student_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -372,14 +373,14 @@ CREATE TABLE public.attendance_records (
   UNIQUE(session_id, student_id)
 );
 
-CREATE INDEX idx_attendance_records_session_id ON public.attendance_records(session_id);
-CREATE INDEX idx_attendance_records_student_id ON public.attendance_records(student_id);
+CREATE INDEX IF NOT EXISTS idx_attendance_records_session_id ON public.attendance_records(session_id);
+CREATE INDEX IF NOT EXISTS idx_attendance_records_student_id ON public.attendance_records(student_id);
 
 -- =====================================================
 -- PART 18: NOTIFICATIONS (depends on: users)
 -- =====================================================
 
-CREATE TABLE public.notifications (
+CREATE TABLE IF NOT EXISTS public.notifications (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   type TEXT NOT NULL CHECK (type IN ('assignment', 'grade', 'enrollment', 'file', 'system', 'attendance')),
@@ -390,16 +391,16 @@ CREATE TABLE public.notifications (
   created_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 
-CREATE INDEX idx_notifications_user_id ON public.notifications(user_id);
-CREATE INDEX idx_notifications_user_unread ON public.notifications(user_id) WHERE read = false;
-CREATE INDEX idx_notifications_type ON public.notifications(type);
-CREATE INDEX idx_notifications_created_at ON public.notifications(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON public.notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON public.notifications(user_id) WHERE read = false;
+CREATE INDEX IF NOT EXISTS idx_notifications_type ON public.notifications(type);
+CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON public.notifications(created_at DESC);
 
 -- =====================================================
 -- PART 19: USER_SESSIONS (depends on: users)
 -- =====================================================
 
-CREATE TABLE public.user_sessions (
+CREATE TABLE IF NOT EXISTS public.user_sessions (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   device_fingerprint TEXT NOT NULL,
@@ -410,16 +411,16 @@ CREATE TABLE public.user_sessions (
   created_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 
-CREATE INDEX idx_user_sessions_user_id ON public.user_sessions(user_id);
-CREATE INDEX idx_user_sessions_is_active ON public.user_sessions(is_active);
-CREATE INDEX idx_user_sessions_device_fingerprint ON public.user_sessions(device_fingerprint);
-CREATE INDEX idx_user_sessions_last_activity ON public.user_sessions(last_activity);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON public.user_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_is_active ON public.user_sessions(is_active);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_device_fingerprint ON public.user_sessions(device_fingerprint);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_last_activity ON public.user_sessions(last_activity);
 
 -- =====================================================
 -- PART 20: ANNOUNCEMENTS (depends on: users)
 -- =====================================================
 
-CREATE TABLE public.announcements (
+CREATE TABLE IF NOT EXISTS public.announcements (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   title TEXT NOT NULL,
   content TEXT NOT NULL,
@@ -430,21 +431,21 @@ CREATE TABLE public.announcements (
   updated_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 
-CREATE INDEX idx_announcements_active ON public.announcements(is_active);
-CREATE INDEX idx_announcements_created_at ON public.announcements(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_announcements_active ON public.announcements(is_active);
+CREATE INDEX IF NOT EXISTS idx_announcements_created_at ON public.announcements(created_at DESC);
 
 -- =====================================================
 -- PART 21: BANNED_USERS (no FK dependencies)
 -- =====================================================
 
-CREATE TABLE public.banned_users (
+CREATE TABLE IF NOT EXISTS public.banned_users (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   email TEXT NOT NULL UNIQUE,
   banned_at TIMESTAMPTZ DEFAULT now() NOT NULL,
   reason TEXT
 );
 
-CREATE INDEX idx_banned_users_email ON public.banned_users(email);
+CREATE INDEX IF NOT EXISTS idx_banned_users_email ON public.banned_users(email);
 
 -- =====================================================
 -- PART 22: ENABLE ROW LEVEL SECURITY (ALL TABLES)
@@ -478,189 +479,246 @@ ALTER TABLE public.banned_users ENABLE ROW LEVEL SECURITY;
 -- =====================================================
 
 -- ===== USERS =====
+DROP POLICY IF EXISTS "Users can read own profile" ON public.users;
 CREATE POLICY "Users can read own profile" ON public.users
   FOR SELECT USING (auth.uid() = id);
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.users;
 CREATE POLICY "Users can insert own profile" ON public.users
   FOR INSERT WITH CHECK (auth.uid() = id);
+DROP POLICY IF EXISTS "Users can update own profile" ON public.users;
 CREATE POLICY "Users can update own profile" ON public.users
   FOR UPDATE USING (auth.uid() = id);
+DROP POLICY IF EXISTS "Teachers can read linked students" ON public.users;
 CREATE POLICY "Teachers can read linked students" ON public.users
   FOR SELECT USING (
     id IN (SELECT student_id FROM public.teacher_student_links WHERE teacher_id = auth.uid())
   );
+DROP POLICY IF EXISTS "Anyone authenticated can find teachers" ON public.users;
 CREATE POLICY "Anyone authenticated can find teachers" ON public.users
   FOR SELECT USING (role = 'teacher' AND teacher_code IS NOT NULL);
 
 -- ===== TEACHER-STUDENT LINKS =====
+DROP POLICY IF EXISTS "Teachers can see own student links" ON public.teacher_student_links;
 CREATE POLICY "Teachers can see own student links" ON public.teacher_student_links
   FOR SELECT USING (teacher_id = auth.uid());
+DROP POLICY IF EXISTS "Students can see own teacher links" ON public.teacher_student_links;
 CREATE POLICY "Students can see own teacher links" ON public.teacher_student_links
   FOR SELECT USING (student_id = auth.uid());
+DROP POLICY IF EXISTS "Students can create links" ON public.teacher_student_links;
 CREATE POLICY "Students can create links" ON public.teacher_student_links
   FOR INSERT WITH CHECK (student_id = auth.uid());
+DROP POLICY IF EXISTS "Students can delete own links" ON public.teacher_student_links;
 CREATE POLICY "Students can delete own links" ON public.teacher_student_links
   FOR DELETE USING (student_id = auth.uid());
 
 -- ===== SUMMARIES =====
+DROP POLICY IF EXISTS "Users can read own summaries" ON public.summaries;
 CREATE POLICY "Users can read own summaries" ON public.summaries
   FOR SELECT USING (user_id = auth.uid());
+DROP POLICY IF EXISTS "Teachers can read linked student summaries" ON public.summaries;
 CREATE POLICY "Teachers can read linked student summaries" ON public.summaries
   FOR SELECT USING (
     user_id IN (SELECT student_id FROM public.teacher_student_links WHERE teacher_id = auth.uid())
   );
+DROP POLICY IF EXISTS "Users can create own summaries" ON public.summaries;
 CREATE POLICY "Users can create own summaries" ON public.summaries
   FOR INSERT WITH CHECK (user_id = auth.uid());
+DROP POLICY IF EXISTS "Users can delete own summaries" ON public.summaries;
 CREATE POLICY "Users can delete own summaries" ON public.summaries
   FOR DELETE USING (user_id = auth.uid());
 
 -- ===== SUBJECTS =====
+DROP POLICY IF EXISTS "Teachers can view own subjects" ON public.subjects;
 CREATE POLICY "Teachers can view own subjects" ON public.subjects
   FOR SELECT USING (
     teacher_id = auth.uid()
     OR id IN (SELECT subject_id FROM public.subject_teachers WHERE teacher_id = auth.uid())
   );
+DROP POLICY IF EXISTS "Students can view enrolled subjects" ON public.subjects;
 CREATE POLICY "Students can view enrolled subjects" ON public.subjects
   FOR SELECT USING (
     id IN (SELECT public.get_student_subject_ids(auth.uid()))
   );
+DROP POLICY IF EXISTS "Teachers can create subjects" ON public.subjects;
 CREATE POLICY "Teachers can create subjects" ON public.subjects
   FOR INSERT WITH CHECK (teacher_id = auth.uid());
+DROP POLICY IF EXISTS "Teachers can update own subjects" ON public.subjects;
 CREATE POLICY "Teachers can update own subjects" ON public.subjects
   FOR UPDATE USING (teacher_id = auth.uid());
+DROP POLICY IF EXISTS "Teachers can delete own subjects" ON public.subjects;
 CREATE POLICY "Teachers can delete own subjects" ON public.subjects
   FOR DELETE USING (teacher_id = auth.uid());
 
 -- ===== SUBJECT_TEACHERS =====
+DROP POLICY IF EXISTS "Teachers can view subject_teachers in their subjects" ON public.subject_teachers;
 CREATE POLICY "Teachers can view subject_teachers in their subjects" ON public.subject_teachers
   FOR SELECT USING (
     subject_id IN (SELECT public.get_teacher_subject_ids(auth.uid()))
   );
+DROP POLICY IF EXISTS "Students can view subject_teachers in enrolled subjects" ON public.subject_teachers;
 CREATE POLICY "Students can view subject_teachers in enrolled subjects" ON public.subject_teachers
   FOR SELECT USING (
     subject_id IN (SELECT public.get_student_subject_ids(auth.uid()))
   );
+DROP POLICY IF EXISTS "Subject owner can add co-teachers" ON public.subject_teachers;
 CREATE POLICY "Subject owner can add co-teachers" ON public.subject_teachers
   FOR INSERT WITH CHECK (
     subject_id IN (SELECT id FROM public.subjects WHERE teacher_id = auth.uid())
   );
+DROP POLICY IF EXISTS "Subject owner can remove co-teachers" ON public.subject_teachers;
 CREATE POLICY "Subject owner can remove co-teachers" ON public.subject_teachers
   FOR DELETE USING (
     subject_id IN (SELECT id FROM public.subjects WHERE teacher_id = auth.uid())
   );
+DROP POLICY IF EXISTS "Co-teachers can remove themselves" ON public.subject_teachers;
 CREATE POLICY "Co-teachers can remove themselves" ON public.subject_teachers
   FOR DELETE USING (
     teacher_id = auth.uid() AND role = 'co_teacher'
   );
 
 -- ===== SUBJECT_STUDENTS =====
+DROP POLICY IF EXISTS "Teachers can view enrollments in their subjects" ON public.subject_students;
 CREATE POLICY "Teachers can view enrollments in their subjects" ON public.subject_students
   FOR SELECT USING (
     subject_id IN (SELECT public.get_teacher_subject_ids(auth.uid()))
   );
+DROP POLICY IF EXISTS "Students can view own enrollments" ON public.subject_students;
 CREATE POLICY "Students can view own enrollments" ON public.subject_students
   FOR SELECT USING (student_id = auth.uid());
+DROP POLICY IF EXISTS "Teachers can enroll students" ON public.subject_students;
 CREATE POLICY "Teachers can enroll students" ON public.subject_students
   FOR INSERT WITH CHECK (
     subject_id IN (SELECT public.get_teacher_subject_ids(auth.uid()))
   );
+DROP POLICY IF EXISTS "Teachers can remove students" ON public.subject_students;
 CREATE POLICY "Teachers can remove students" ON public.subject_students
   FOR DELETE USING (
     subject_id IN (SELECT public.get_teacher_subject_ids(auth.uid()))
   );
 
 -- ===== LECTURES =====
+DROP POLICY IF EXISTS "Teachers can view lectures in own subjects" ON public.lectures;
 CREATE POLICY "Teachers can view lectures in own subjects" ON public.lectures
   FOR SELECT USING (
     subject_id IN (SELECT public.get_teacher_subject_ids(auth.uid()))
   );
+DROP POLICY IF EXISTS "Students can view lectures in enrolled subjects" ON public.lectures;
 CREATE POLICY "Students can view lectures in enrolled subjects" ON public.lectures
   FOR SELECT USING (
     subject_id IN (SELECT public.get_student_subject_ids(auth.uid()))
   );
+DROP POLICY IF EXISTS "Teachers can create lectures" ON public.lectures;
 CREATE POLICY "Teachers can create lectures" ON public.lectures
   FOR INSERT WITH CHECK (
     subject_id IN (SELECT public.get_teacher_subject_ids(auth.uid()))
   );
+DROP POLICY IF EXISTS "Teachers can update lectures" ON public.lectures;
 CREATE POLICY "Teachers can update lectures" ON public.lectures
   FOR UPDATE USING (
     subject_id IN (SELECT public.get_teacher_subject_ids(auth.uid()))
   );
+DROP POLICY IF EXISTS "Teachers can delete lectures" ON public.lectures;
 CREATE POLICY "Teachers can delete lectures" ON public.lectures
   FOR DELETE USING (
     subject_id IN (SELECT public.get_teacher_subject_ids(auth.uid()))
   );
 
 -- ===== QUIZZES =====
+DROP POLICY IF EXISTS "Users can read own quizzes" ON public.quizzes;
 CREATE POLICY "Users can read own quizzes" ON public.quizzes
   FOR SELECT USING (user_id = auth.uid());
+DROP POLICY IF EXISTS "Students can read teacher quizzes" ON public.quizzes;
 CREATE POLICY "Students can read teacher quizzes" ON public.quizzes
   FOR SELECT USING (
     user_id IN (SELECT teacher_id FROM public.teacher_student_links WHERE student_id = auth.uid())
   );
+DROP POLICY IF EXISTS "Users can create own quizzes" ON public.quizzes;
 CREATE POLICY "Users can create own quizzes" ON public.quizzes
   FOR INSERT WITH CHECK (user_id = auth.uid());
+DROP POLICY IF EXISTS "Users can update own quizzes" ON public.quizzes;
 CREATE POLICY "Users can update own quizzes" ON public.quizzes
   FOR UPDATE USING (user_id = auth.uid());
+DROP POLICY IF EXISTS "Users can delete own quizzes" ON public.quizzes;
 CREATE POLICY "Users can delete own quizzes" ON public.quizzes
   FOR DELETE USING (user_id = auth.uid());
 
 -- ===== SCORES =====
+DROP POLICY IF EXISTS "Students can read own scores" ON public.scores;
 CREATE POLICY "Students can read own scores" ON public.scores
   FOR SELECT USING (student_id = auth.uid());
+DROP POLICY IF EXISTS "Teachers can read own quiz scores" ON public.scores;
 CREATE POLICY "Teachers can read own quiz scores" ON public.scores
   FOR SELECT USING (teacher_id = auth.uid());
+DROP POLICY IF EXISTS "Students can create own scores" ON public.scores;
 CREATE POLICY "Students can create own scores" ON public.scores
   FOR INSERT WITH CHECK (student_id = auth.uid());
+DROP POLICY IF EXISTS "Teachers can delete own quiz scores" ON public.scores;
 CREATE POLICY "Teachers can delete own quiz scores" ON public.scores
   FOR DELETE USING (teacher_id = auth.uid());
 
 -- ===== LECTURE_NOTES =====
+DROP POLICY IF EXISTS "Teachers can view all notes in their subjects" ON public.lecture_notes;
 CREATE POLICY "Teachers can view all notes in their subjects" ON public.lecture_notes
   FOR SELECT USING (
     public.is_lecture_teacher(lecture_id, auth.uid())
   );
+DROP POLICY IF EXISTS "Students can view public notes in enrolled subjects" ON public.lecture_notes;
 CREATE POLICY "Students can view public notes in enrolled subjects" ON public.lecture_notes
   FOR SELECT USING (
     (visibility = 'public' AND public.is_lecture_student(lecture_id, auth.uid())) OR user_id = auth.uid()
   );
+DROP POLICY IF EXISTS "Users can create notes" ON public.lecture_notes;
 CREATE POLICY "Users can create notes" ON public.lecture_notes
   FOR INSERT WITH CHECK (user_id = auth.uid());
+DROP POLICY IF EXISTS "Users can update own notes" ON public.lecture_notes;
 CREATE POLICY "Users can update own notes" ON public.lecture_notes
   FOR UPDATE USING (user_id = auth.uid());
+DROP POLICY IF EXISTS "Users can delete own notes" ON public.lecture_notes;
 CREATE POLICY "Users can delete own notes" ON public.lecture_notes
   FOR DELETE USING (user_id = auth.uid());
 
 -- ===== NOTE_VIEWS =====
+DROP POLICY IF EXISTS "Users can view note views" ON public.note_views;
 CREATE POLICY "Users can view note views" ON public.note_views
   FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Users can insert own note views" ON public.note_views;
 CREATE POLICY "Users can insert own note views" ON public.note_views
   FOR INSERT WITH CHECK (user_id = auth.uid());
+DROP POLICY IF EXISTS "Users can delete own note views" ON public.note_views;
 CREATE POLICY "Users can delete own note views" ON public.note_views
   FOR DELETE USING (user_id = auth.uid());
 
 -- ===== ASSIGNMENTS =====
+DROP POLICY IF EXISTS "Teachers can view assignments in own subjects" ON public.assignments;
 CREATE POLICY "Teachers can view assignments in own subjects" ON public.assignments
   FOR SELECT USING (
     subject_id IN (SELECT public.get_teacher_subject_ids(auth.uid()))
   );
+DROP POLICY IF EXISTS "Students can view assignments in enrolled subjects" ON public.assignments;
 CREATE POLICY "Students can view assignments in enrolled subjects" ON public.assignments
   FOR SELECT USING (
     subject_id IN (SELECT public.get_student_subject_ids(auth.uid()))
   );
+DROP POLICY IF EXISTS "Teachers can create assignments" ON public.assignments;
 CREATE POLICY "Teachers can create assignments" ON public.assignments
   FOR INSERT WITH CHECK (teacher_id = auth.uid());
+DROP POLICY IF EXISTS "Teachers can update own assignments" ON public.assignments;
 CREATE POLICY "Teachers can update own assignments" ON public.assignments
   FOR UPDATE USING (teacher_id = auth.uid());
+DROP POLICY IF EXISTS "Teachers can delete own assignments" ON public.assignments;
 CREATE POLICY "Teachers can delete own assignments" ON public.assignments
   FOR DELETE USING (teacher_id = auth.uid());
 
 -- ===== USER_FILES =====
+DROP POLICY IF EXISTS "Users can view own files" ON public.user_files;
 CREATE POLICY "Users can view own files" ON public.user_files
   FOR SELECT USING (user_id = auth.uid());
+DROP POLICY IF EXISTS "Users can view files shared with them" ON public.user_files;
 CREATE POLICY "Users can view files shared with them" ON public.user_files
   FOR SELECT USING (
     id IN (SELECT file_id FROM public.file_shares WHERE shared_with = auth.uid())
   );
+DROP POLICY IF EXISTS "Teachers can view files linked to their assignments" ON public.user_files;
 CREATE POLICY "Teachers can view files linked to their assignments" ON public.user_files
   FOR SELECT USING (
     assignment_id IN (
@@ -668,48 +726,61 @@ CREATE POLICY "Teachers can view files linked to their assignments" ON public.us
       WHERE a.subject_id IN (SELECT public.get_teacher_subject_ids(auth.uid()))
     )
   );
+DROP POLICY IF EXISTS "Users can upload files" ON public.user_files;
 CREATE POLICY "Users can upload files" ON public.user_files
   FOR INSERT WITH CHECK (user_id = auth.uid());
+DROP POLICY IF EXISTS "Users can update own files" ON public.user_files;
 CREATE POLICY "Users can update own files" ON public.user_files
   FOR UPDATE USING (user_id = auth.uid());
+DROP POLICY IF EXISTS "Users can delete own files" ON public.user_files;
 CREATE POLICY "Users can delete own files" ON public.user_files
   FOR DELETE USING (user_id = auth.uid());
 
 -- ===== FILE_SHARES =====
+DROP POLICY IF EXISTS "Users can view shares for their files" ON public.file_shares;
 CREATE POLICY "Users can view shares for their files" ON public.file_shares
   FOR SELECT USING (shared_by = auth.uid() OR shared_with = auth.uid());
+DROP POLICY IF EXISTS "Users can share own files" ON public.file_shares;
 CREATE POLICY "Users can share own files" ON public.file_shares
   FOR INSERT WITH CHECK (shared_by = auth.uid());
+DROP POLICY IF EXISTS "File owners can update shares" ON public.file_shares;
 CREATE POLICY "File owners can update shares" ON public.file_shares
   FOR UPDATE USING (
     file_id IN (SELECT id FROM public.user_files WHERE user_id = auth.uid())
   );
+DROP POLICY IF EXISTS "File owners can delete shares" ON public.file_shares;
 CREATE POLICY "File owners can delete shares" ON public.file_shares
   FOR DELETE USING (shared_by = auth.uid() OR shared_with = auth.uid());
 
 -- ===== SUBJECT_FILES =====
+DROP POLICY IF EXISTS "Teachers can view files in own subjects" ON public.subject_files;
 CREATE POLICY "Teachers can view files in own subjects" ON public.subject_files
   FOR SELECT USING (
     subject_id IN (SELECT public.get_teacher_subject_ids(auth.uid()))
   );
+DROP POLICY IF EXISTS "Students can view files in enrolled subjects" ON public.subject_files;
 CREATE POLICY "Students can view files in enrolled subjects" ON public.subject_files
   FOR SELECT USING (
     subject_id IN (SELECT public.get_student_subject_ids(auth.uid()))
   );
+DROP POLICY IF EXISTS "Teachers can upload files to own subjects" ON public.subject_files;
 CREATE POLICY "Teachers can upload files to own subjects" ON public.subject_files
   FOR INSERT WITH CHECK (
     subject_id IN (SELECT public.get_teacher_subject_ids(auth.uid()))
   );
+DROP POLICY IF EXISTS "Teachers can update files in own subjects" ON public.subject_files;
 CREATE POLICY "Teachers can update files in own subjects" ON public.subject_files
   FOR UPDATE USING (
     subject_id IN (SELECT public.get_teacher_subject_ids(auth.uid()))
   );
+DROP POLICY IF EXISTS "Teachers can delete files in own subjects" ON public.subject_files;
 CREATE POLICY "Teachers can delete files in own subjects" ON public.subject_files
   FOR DELETE USING (
     subject_id IN (SELECT public.get_teacher_subject_ids(auth.uid()))
   );
 
 -- ===== SUBMISSIONS =====
+DROP POLICY IF EXISTS "Teachers can view submissions for their assignments" ON public.submissions;
 CREATE POLICY "Teachers can view submissions for their assignments" ON public.submissions
   FOR SELECT USING (
     assignment_id IN (
@@ -717,12 +788,16 @@ CREATE POLICY "Teachers can view submissions for their assignments" ON public.su
       WHERE a.subject_id IN (SELECT public.get_teacher_subject_ids(auth.uid()))
     )
   );
+DROP POLICY IF EXISTS "Students can view own submissions" ON public.submissions;
 CREATE POLICY "Students can view own submissions" ON public.submissions
   FOR SELECT USING (student_id = auth.uid());
+DROP POLICY IF EXISTS "Students can create submissions" ON public.submissions;
 CREATE POLICY "Students can create submissions" ON public.submissions
   FOR INSERT WITH CHECK (student_id = auth.uid());
+DROP POLICY IF EXISTS "Students can update own ungraded submissions" ON public.submissions;
 CREATE POLICY "Students can update own ungraded submissions" ON public.submissions
   FOR UPDATE USING (student_id = auth.uid() AND status = 'submitted');
+DROP POLICY IF EXISTS "Teachers can grade submissions for their assignments" ON public.submissions;
 CREATE POLICY "Teachers can grade submissions for their assignments" ON public.submissions
   FOR UPDATE USING (
     assignment_id IN (
@@ -732,64 +807,84 @@ CREATE POLICY "Teachers can grade submissions for their assignments" ON public.s
   );
 
 -- ===== ATTENDANCE_SESSIONS =====
+DROP POLICY IF EXISTS "Teachers can view own attendance sessions" ON public.attendance_sessions;
 CREATE POLICY "Teachers can view own attendance sessions" ON public.attendance_sessions
   FOR SELECT USING (teacher_id = auth.uid());
+DROP POLICY IF EXISTS "Students can view attendance sessions in enrolled subjects" ON public.attendance_sessions;
 CREATE POLICY "Students can view attendance sessions in enrolled subjects" ON public.attendance_sessions
   FOR SELECT USING (
     subject_id IN (SELECT public.get_student_subject_ids(auth.uid()))
   );
+DROP POLICY IF EXISTS "Teachers can create attendance sessions" ON public.attendance_sessions;
 CREATE POLICY "Teachers can create attendance sessions" ON public.attendance_sessions
   FOR INSERT WITH CHECK (
     teacher_id = auth.uid()
   );
+DROP POLICY IF EXISTS "Teachers can update own attendance sessions" ON public.attendance_sessions;
 CREATE POLICY "Teachers can update own attendance sessions" ON public.attendance_sessions
   FOR UPDATE USING (teacher_id = auth.uid());
+DROP POLICY IF EXISTS "Teachers can delete own attendance sessions" ON public.attendance_sessions;
 CREATE POLICY "Teachers can delete own attendance sessions" ON public.attendance_sessions
   FOR DELETE USING (teacher_id = auth.uid());
 
 -- ===== ATTENDANCE_RECORDS =====
+DROP POLICY IF EXISTS "Teachers can view attendance records for own sessions" ON public.attendance_records;
 CREATE POLICY "Teachers can view attendance records for own sessions" ON public.attendance_records
   FOR SELECT USING (
     session_id IN (SELECT id FROM public.attendance_sessions WHERE teacher_id = auth.uid())
   );
+DROP POLICY IF EXISTS "Students can view own attendance records" ON public.attendance_records;
 CREATE POLICY "Students can view own attendance records" ON public.attendance_records
   FOR SELECT USING (student_id = auth.uid());
+DROP POLICY IF EXISTS "Students can check in to attendance" ON public.attendance_records;
 CREATE POLICY "Students can check in to attendance" ON public.attendance_records
   FOR INSERT WITH CHECK (
     student_id = auth.uid()
   );
+DROP POLICY IF EXISTS "Teachers can delete attendance records for own sessions" ON public.attendance_records;
 CREATE POLICY "Teachers can delete attendance records for own sessions" ON public.attendance_records
   FOR DELETE USING (
     session_id IN (SELECT id FROM public.attendance_sessions WHERE teacher_id = auth.uid())
   );
 
 -- ===== NOTIFICATIONS =====
+DROP POLICY IF EXISTS "Users can view own notifications" ON public.notifications;
 CREATE POLICY "Users can view own notifications" ON public.notifications
   FOR SELECT USING (user_id = auth.uid());
+DROP POLICY IF EXISTS "System can create notifications" ON public.notifications;
 CREATE POLICY "System can create notifications" ON public.notifications
   FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+DROP POLICY IF EXISTS "Users can update own notifications" ON public.notifications;
 CREATE POLICY "Users can update own notifications" ON public.notifications
   FOR UPDATE USING (user_id = auth.uid());
+DROP POLICY IF EXISTS "Users can delete own notifications" ON public.notifications;
 CREATE POLICY "Users can delete own notifications" ON public.notifications
   FOR DELETE USING (user_id = auth.uid());
 
 -- ===== USER_SESSIONS =====
+DROP POLICY IF EXISTS "Users can view own sessions" ON public.user_sessions;
 CREATE POLICY "Users can view own sessions" ON public.user_sessions
   FOR SELECT USING (user_id = auth.uid());
+DROP POLICY IF EXISTS "Users can create own sessions" ON public.user_sessions;
 CREATE POLICY "Users can create own sessions" ON public.user_sessions
   FOR INSERT WITH CHECK (user_id = auth.uid());
+DROP POLICY IF EXISTS "Users can update own sessions" ON public.user_sessions;
 CREATE POLICY "Users can update own sessions" ON public.user_sessions
   FOR UPDATE USING (user_id = auth.uid());
+DROP POLICY IF EXISTS "Users can delete own sessions" ON public.user_sessions;
 CREATE POLICY "Users can delete own sessions" ON public.user_sessions
   FOR DELETE USING (user_id = auth.uid());
 
 -- ===== ANNOUNCEMENTS =====
+DROP POLICY IF EXISTS "Anyone can read active announcements" ON public.announcements;
 CREATE POLICY "Anyone can read active announcements" ON public.announcements
   FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Admins can manage announcements" ON public.announcements;
 CREATE POLICY "Admins can manage announcements" ON public.announcements
   FOR ALL USING (true);
 
 -- ===== BANNED_USERS =====
+DROP POLICY IF EXISTS "Admins can manage banned users" ON public.banned_users;
 CREATE POLICY "Admins can manage banned users" ON public.banned_users
   FOR ALL USING (true);
 
@@ -890,6 +985,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS trg_generate_teacher_code ON public.users;
 CREATE TRIGGER trg_generate_teacher_code
   BEFORE INSERT ON public.users
   FOR EACH ROW EXECUTE FUNCTION public.generate_teacher_code();
@@ -903,10 +999,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_users_updated_at ON public.users;
 CREATE TRIGGER trg_users_updated_at
   BEFORE UPDATE ON public.users
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
 
+DROP TRIGGER IF EXISTS trg_attendance_sessions_updated_at ON public.attendance_sessions;
 CREATE TRIGGER trg_attendance_sessions_updated_at
   BEFORE UPDATE ON public.attendance_sessions
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
@@ -937,6 +1035,7 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
@@ -952,6 +1051,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS trg_auto_insert_subject_owner ON public.subjects;
 CREATE TRIGGER trg_auto_insert_subject_owner
   AFTER INSERT ON public.subjects
   FOR EACH ROW EXECUTE FUNCTION public.auto_insert_subject_owner();
@@ -1001,9 +1101,11 @@ DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.subject_teacher
 INSERT INTO storage.buckets (id, name, public) VALUES ('user-files', 'user-files', true) ON CONFLICT DO NOTHING;
 UPDATE storage.buckets SET public = true WHERE id = 'user-files';
 
+DROP POLICY IF EXISTS "Users can upload files" ON storage.objects;
 CREATE POLICY "Users can upload files" ON storage.objects
   FOR INSERT WITH CHECK (bucket_id = 'user-files' AND auth.uid()::text = (storage.foldername(name))[1]);
 
+DROP POLICY IF EXISTS "Teachers can upload course files" ON storage.objects;
 CREATE POLICY "Teachers can upload course files" ON storage.objects
   FOR INSERT WITH CHECK (
     bucket_id = 'user-files' AND 
@@ -1011,21 +1113,26 @@ CREATE POLICY "Teachers can upload course files" ON storage.objects
     EXISTS (SELECT 1 FROM public.subjects WHERE teacher_id = auth.uid())
   );
 
+DROP POLICY IF EXISTS "Users can read own files" ON storage.objects;
 CREATE POLICY "Users can read own files" ON storage.objects
   FOR SELECT USING (bucket_id = 'user-files' AND auth.uid()::text = (storage.foldername(name))[1]);
 
+DROP POLICY IF EXISTS "Authenticated users can read course files" ON storage.objects;
 CREATE POLICY "Authenticated users can read course files" ON storage.objects
   FOR SELECT USING (
     bucket_id = 'user-files' AND 
     (storage.foldername(name))[1] IN ('courses', 'subjects')
   );
 
+DROP POLICY IF EXISTS "Users can update own files" ON storage.objects;
 CREATE POLICY "Users can update own files" ON storage.objects
   FOR UPDATE USING (bucket_id = 'user-files' AND auth.uid()::text = (storage.foldername(name))[1]);
 
+DROP POLICY IF EXISTS "Users can delete own files" ON storage.objects;
 CREATE POLICY "Users can delete own files" ON storage.objects
   FOR DELETE USING (bucket_id = 'user-files' AND auth.uid()::text = (storage.foldername(name))[1]);
 
+DROP POLICY IF EXISTS "Teachers can read subject files" ON storage.objects;
 CREATE POLICY "Teachers can read subject files" ON storage.objects
   FOR SELECT USING (
     bucket_id = 'user-files' AND 
@@ -1036,6 +1143,7 @@ CREATE POLICY "Teachers can read subject files" ON storage.objects
     )
   );
 
+DROP POLICY IF EXISTS "Students can read subject files" ON storage.objects;
 CREATE POLICY "Students can read subject files" ON storage.objects
   FOR SELECT USING (
     bucket_id = 'user-files' AND 
