@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase-server';
+import { requireRole } from '@/lib/api-security';
 
 // ─── GET: Check if the system is initialized ───
 export async function GET() {
@@ -60,8 +61,24 @@ export async function GET() {
 }
 
 // ─── POST: Save institution data ───
+// SECURITY: This endpoint can only be used before the system is initialized (no users).
+// Once users exist, it requires admin/superadmin role.
 export async function POST(request: NextRequest) {
   try {
+    // Check if system is already initialized
+    const { count: userCount } = await supabaseServer
+      .from('users')
+      .select('*', { count: 'exact', head: true });
+
+    const isInitialized = userCount && userCount > 0;
+
+    // If system is already initialized, require admin role
+    if (isInitialized) {
+      const { user: authUser, error: authError } = await requireRole(request, ['admin', 'superadmin']);
+      if (authError) return authError;
+    }
+    // If system is NOT initialized, allow unauthenticated access (first-time setup)
+
     const body = await request.json();
     const {
       action,
@@ -159,7 +176,6 @@ export async function POST(request: NextRequest) {
 
       if (insertError) {
         console.error('[setup] Error saving institution:', insertError);
-        // If table doesn't exist, return the SQL for manual execution
         const isTableMissing = insertError.code === '42P01' ||
           insertError.code === 'PGRST205' ||
           insertError.message?.includes('Could not find the table');
@@ -178,8 +194,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, action: 'created', via: 'direct' });
     }
 
-    // ─── Action: Auto-create institution_settings table ───
+    // ─── Action: Auto-create institution_settings table ──
+    // SECURITY: This action ALWAYS requires admin role
     if (action === 'create_table') {
+      const { user: authUser, error: authError } = await requireRole(request, ['admin', 'superadmin']);
+      if (authError) return authError;
+
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
       const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
@@ -188,13 +208,7 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        // Use Supabase REST API to execute SQL via rpc - we create a setup function first
-        // Direct DDL is not possible via REST, so we use the pg_net extension or direct approach
-        // Instead, we'll try to insert into the table - if it fails, the table doesn't exist
-        // and we'll need to guide the user, but first let's try the most common approach:
-        // Use the management API to run SQL
-
-        // Attempt 1: Try to insert a test row to check if table exists
+        // Attempt: Try to insert a test row to check if table exists
         const { error: testError } = await supabaseServer
           .from('institution_settings')
           .select('id')
@@ -205,7 +219,6 @@ export async function POST(request: NextRequest) {
         }
 
         // Table doesn't exist - try to create it via SQL execution
-        // Use Supabase's /rest/v1/rpc endpoint with service role
         const migrationSQL = getMigrationSQL();
 
         // Execute via Supabase SQL API
@@ -306,42 +319,21 @@ CREATE TRIGGER trg_institution_updated_at
   BEFORE UPDATE ON institution_settings
   FOR EACH ROW EXECUTE FUNCTION update_institution_updated_at();
 
-CREATE OR REPLACE FUNCTION setup_initialize_system(
-  p_name TEXT,
-  p_name_en TEXT DEFAULT NULL,
-  p_type TEXT DEFAULT 'center',
-  p_logo_url TEXT DEFAULT NULL,
-  p_country TEXT DEFAULT NULL,
-  p_city TEXT DEFAULT NULL,
-  p_address TEXT DEFAULT NULL,
-  p_phone TEXT DEFAULT NULL,
-  p_email TEXT DEFAULT NULL,
-  p_website TEXT DEFAULT NULL,
-  p_academic_year TEXT DEFAULT NULL,
-  p_description TEXT DEFAULT NULL
-)
+-- Atomic first-user promotion function (prevents race conditions)
+CREATE OR REPLACE FUNCTION promote_first_user(p_user_id UUID)
 RETURNS JSON
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-  v_id UUID;
-  v_existing_id UUID;
+  v_count INTEGER;
 BEGIN
-  SELECT id INTO v_existing_id FROM institution_settings LIMIT 1;
-  IF v_existing_id IS NOT NULL THEN
-    UPDATE institution_settings SET
-      name = p_name, name_en = p_name_en, type = p_type,
-      logo_url = p_logo_url, country = p_country, city = p_city,
-      address = p_address, phone = p_phone, email = p_email,
-      website = p_website, academic_year = p_academic_year, description = p_description
-    WHERE id = v_existing_id;
-    RETURN json_build_object('action', 'updated', 'id', v_existing_id);
+  SELECT COUNT(*) INTO v_count FROM users;
+  IF v_count = 1 THEN
+    UPDATE users SET role = 'superadmin', updated_at = NOW() WHERE id = p_user_id;
+    RETURN json_build_object('promoted', true, 'role', 'superadmin');
   END IF;
-  INSERT INTO institution_settings (name, name_en, type, logo_url, country, city, address, phone, email, website, academic_year, description)
-  VALUES (p_name, p_name_en, p_type, p_logo_url, p_country, p_city, p_address, p_phone, p_email, p_website, p_academic_year, p_description)
-  RETURNING id INTO v_id;
-  RETURN json_build_object('action', 'created', 'id', v_id);
+  RETURN json_build_object('promoted', false);
 END;
 $$;
 `;

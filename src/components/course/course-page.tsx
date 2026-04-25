@@ -282,11 +282,15 @@ export default function CoursePage({ profile, role }: CoursePageProps) {
   // -------------------------------------------------------
   // Copy join code
   // -------------------------------------------------------
-  const handleCopyCode = () => {
+  const handleCopyCode = async () => {
     if (!subject?.join_code) return;
-    navigator.clipboard.writeText(subject.join_code);
-    setCopiedCode(true);
-    setTimeout(() => setCopiedCode(false), 2000);
+    try {
+      await navigator.clipboard.writeText(subject.join_code);
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 2000);
+    } catch {
+      toast.error('فشل في نسخ الكود');
+    }
   };
 
   // -------------------------------------------------------

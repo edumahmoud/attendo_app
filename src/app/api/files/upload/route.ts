@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase-server';
+import { requireAuth } from '@/lib/api-security';
 
 // Allowed MIME types
 const ALLOWED_MIME_TYPES = [
@@ -14,7 +15,8 @@ const ALLOWED_MIME_TYPES = [
   'image/png',
   'image/gif',
   'image/webp',
-  'image/svg+xml',
+  // NOTE: SVG removed due to XSS risk (SVG can contain JavaScript)
+  // 'image/svg+xml',
   'video/mp4',
   'video/webm',
   'video/quicktime',
@@ -31,9 +33,13 @@ const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
 export async function POST(request: NextRequest) {
   try {
+    // ── AUTH GATE ──
+    const { user: authUser, error: authError } = await requireAuth(request);
+    if (authError) return authError;
+
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
-    const userId = formData.get('userId') as string | null;
+    const clientUserId = formData.get('userId') as string | null;
     const assignmentId = formData.get('assignmentId') as string | null;
     const customName = formData.get('customName') as string | null;
 
@@ -44,11 +50,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!userId) {
-      return NextResponse.json(
-        { success: false, error: 'معرف المستخدم مطلوب' },
-        { status: 401 }
-      );
+    // ── Use authenticated user ID, ignore client-supplied userId ──
+    const userId = authUser.id;
+
+    if (clientUserId && clientUserId !== userId) {
+      console.warn(`[files/upload] Client userId (${clientUserId}) doesn't match auth user (${userId})`);
     }
 
     // Validate file size

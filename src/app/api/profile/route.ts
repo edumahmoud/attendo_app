@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase-server';
+import { requireAuth, isValidHttpUrl } from '@/lib/api-security';
 
 // Allowed fields that can be updated
 const ALLOWED_FIELDS = ['name', 'gender', 'title_id', 'avatar_url', 'username'] as const;
@@ -20,11 +21,20 @@ const VALID_TITLES = ['teacher', 'dr', 'prof', 'assoc_prof', 'assist_prof', 'lec
 
 export async function POST(request: NextRequest) {
   try {
+    // ── AUTH GATE ──
+    const { user: authUser, error: authError } = await requireAuth(request);
+    if (authError) return authError;
+
     const body = await request.json();
     const { userId, updates } = body as { userId?: string; updates?: Record<string, unknown> };
 
     if (!userId) {
       return NextResponse.json({ error: 'معرف المستخدم مطلوب' }, { status: 401 });
+    }
+
+    // ── AUTHORIZATION: Users can only update their own profile ──
+    if (userId !== authUser.id) {
+      return NextResponse.json({ error: 'غير مصرح بتعديل ملف شخصي آخر' }, { status: 403 });
     }
 
     if (!updates || typeof updates !== 'object') {
@@ -71,6 +81,10 @@ export async function POST(request: NextRequest) {
 
         case 'avatar_url':
           if (typeof value === 'string') {
+            // Validate that avatar_url is a safe HTTP(S) URL
+            if (!isValidHttpUrl(value)) {
+              return NextResponse.json({ error: 'رابط الصورة غير صالح' }, { status: 400 });
+            }
             sanitizedUpdates.avatar_url = value;
           } else if (value === null) {
             sanitizedUpdates.avatar_url = null;
@@ -109,8 +123,8 @@ export async function POST(request: NextRequest) {
         const { username, ...updatesWithoutUsername } = sanitizedUpdates;
         if (Object.keys(updatesWithoutUsername).length === 0) {
           // Only username was being updated but column doesn't exist
-          return NextResponse.json({ 
-            success: false, 
+          return NextResponse.json({
+            success: false,
             error: 'عمود اسم المستخدم غير موجود بعد. يرجى تشغيل ترحيل قاعدة البيانات أولاً.',
             needsMigration: true,
           }, { status: 400 });
@@ -121,7 +135,7 @@ export async function POST(request: NextRequest) {
           .eq('id', userId)
           .select()
           .single();
-        
+
         if (retryError) {
           console.error('Profile update retry error:', retryError);
           return NextResponse.json({ error: 'حدث خطأ أثناء تحديث الملف الشخصي' }, { status: 500 });

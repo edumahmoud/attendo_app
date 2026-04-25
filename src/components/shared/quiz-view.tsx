@@ -392,19 +392,12 @@ export default function QuizView({ quizId, onBack, profile }: QuizViewProps) {
           .maybeSingle();
 
         if (!existingLink) {
-          // Auto-link with approved status since student completed teacher's quiz
+          // Create a pending link — teacher must approve
           await supabase.from('teacher_student_links').insert({
             teacher_id: quiz.user_id,
             student_id: profile.id,
-            status: 'approved',
+            status: 'pending',
           });
-        } else if (existingLink.status === 'pending') {
-          // Auto-approve if they have a pending request (they just completed the quiz)
-          await supabase
-            .from('teacher_student_links')
-            .update({ status: 'approved' })
-            .eq('teacher_id', quiz.user_id)
-            .eq('student_id', profile.id);
         }
       }
     } catch (err) {

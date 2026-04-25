@@ -326,10 +326,14 @@ function HomeContent() {
               setCurrentPage('auth');
               signOut();
             }}
-            onOpenSettings={() => setCurrentPage(
-              user.role === 'superadmin' || user.role === 'admin' ? 'admin-dashboard' :
-              user.role === 'teacher' ? 'teacher-dashboard' : 'student-dashboard'
-            )}
+            onOpenSettings={() => {
+              const dashboard = user.role === 'superadmin' || user.role === 'admin' ? 'admin-dashboard' :
+                user.role === 'teacher' ? 'teacher-dashboard' : 'student-dashboard';
+              setCurrentPage(dashboard);
+              if (user.role === 'student') useAppStore.getState().setStudentSection('settings');
+              if (user.role === 'teacher') useAppStore.getState().setTeacherSection('settings');
+              if (user.role === 'admin' || user.role === 'superadmin') useAppStore.getState().setAdminSection('settings');
+            }}
             onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
             sidebarCollapsed={!sidebarOpen}
           />

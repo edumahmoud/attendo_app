@@ -50,6 +50,7 @@ import SubjectsSection from '@/components/shared/subjects-section';
 import PersonalFilesSection from '@/components/shared/personal-files-section';
 import AnnouncementsBanner from '@/components/shared/announcements-banner';
 import NotificationsSection from '@/components/shared/notifications-section';
+import AttendanceSection from '@/components/shared/attendance-section';
 import CoursePage from '@/components/course/course-page';
 import { useAppStore } from '@/stores/app-store';
 import { useAuthStore } from '@/stores/auth-store';
@@ -406,10 +407,14 @@ export default function TeacherDashboard({ profile, onSignOut }: TeacherDashboar
   // -------------------------------------------------------
   // Copy teacher code
   // -------------------------------------------------------
-  const handleCopyTeacherCode = () => {
+  const handleCopyTeacherCode = async () => {
     if (profile.teacher_code) {
-      navigator.clipboard.writeText(profile.teacher_code);
-      toast.success('تم نسخ كود المعلم بنجاح');
+      try {
+        await navigator.clipboard.writeText(profile.teacher_code);
+        toast.success('تم نسخ كود المعلم بنجاح');
+      } catch {
+        toast.error('فشل في نسخ الكود');
+      }
     }
   };
 
@@ -1899,6 +1904,7 @@ export default function TeacherDashboard({ profile, onSignOut }: TeacherDashboar
                   ? <CoursePage profile={profile} role="teacher" />
                   : <SubjectsSection profile={profile} role="teacher" />)}
                 {activeSection === 'students' && renderStudents()}
+                {activeSection === 'attendance' && <AttendanceSection profile={profile} role="teacher" />}
                 {activeSection === 'files' && <PersonalFilesSection profile={profile} role="teacher" />}
                 {activeSection === 'analytics' && renderAnalytics()}
                 {activeSection === 'chat' && <ChatSection profile={profile} role="teacher" />}

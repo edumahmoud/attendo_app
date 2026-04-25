@@ -3,6 +3,7 @@
 // =====================================================
 
 import { NextRequest, NextResponse } from 'next/server';
+import { supabaseServer, getSupabaseServerClient } from '@/lib/supabase-server';
 
 // --- Rate Limiting (in-memory) ---
 
@@ -102,4 +103,128 @@ export function safeErrorResponse(message: string, status: number = 500): NextRe
     { success: false, error: message },
     { status }
   );
+}
+
+// --- Authentication Helpers ---
+
+/**
+ * Verify the authenticated user from the request.
+ * Checks Bearer token first, then falls back to cookie-based session.
+ * Returns the authenticated user object or null.
+ */
+export async function getAuthenticatedUser(request: Request) {
+  // Try Bearer token first
+  const authHeader = request.headers.get('authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.substring(7);
+    const { data: { user }, error } = await supabaseServer.auth.getUser(token);
+    if (!error && user) return user;
+  }
+
+  // Fall back to cookie-based session
+  try {
+    const serverClient = await getSupabaseServerClient();
+    const { data: { user }, error } = await serverClient.auth.getUser();
+    if (!error && user) return user;
+  } catch {}
+
+  return null;
+}
+
+/**
+ * Require authentication. Returns the user or an error response.
+ * Usage: const { user, error } = requireAuth(request);
+ *        if (error) return error;
+ */
+export async function requireAuth(request: Request): Promise<{
+  user: NonNullable<Awaited<ReturnType<typeof getAuthenticatedUser>>>;
+  error: null;
+} | { user: null; error: NextResponse }> {
+  const user = await getAuthenticatedUser(request);
+  if (!user) {
+    return {
+      user: null,
+      error: NextResponse.json(
+        { success: false, error: 'يجب تسجيل الدخول أولاً' },
+        { status: 401 }
+      ),
+    };
+  }
+  return { user, error: null };
+}
+
+/**
+ * Get the user's role from the users table.
+ */
+export async function getUserRole(userId: string): Promise<string | null> {
+  const { data: profile } = await supabaseServer
+    .from('users')
+    .select('role')
+    .eq('id', userId)
+    .single();
+  return (profile as { role: string } | null)?.role || null;
+}
+
+/**
+ * Require that the authenticated user has one of the specified roles.
+ * Returns the user or an error response.
+ */
+export async function requireRole(
+  request: Request,
+  roles: string[]
+): Promise<{
+  user: NonNullable<Awaited<ReturnType<typeof getAuthenticatedUser>>>;
+  error: null;
+} | { user: null; error: NextResponse }> {
+  const { user, error } = await requireAuth(request);
+  if (error) return { user: null, error };
+
+  const role = await getUserRole(user.id);
+  if (!role || !roles.includes(role)) {
+    return {
+      user: null,
+      error: NextResponse.json(
+        { success: false, error: 'غير مصرح بالوصول' },
+        { status: 403 }
+      ),
+    };
+  }
+  return { user, error: null };
+}
+
+/**
+ * Verify that a user is a participant in a conversation.
+ */
+export async function verifyConversationParticipant(userId: string, conversationId: string): Promise<boolean> {
+  const { data } = await supabaseServer
+    .from('conversation_participants')
+    .select('user_id')
+    .eq('conversation_id', conversationId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  return !!data;
+}
+
+/**
+ * Validate that a URL is a safe HTTP(S) URL (prevents javascript: protocol).
+ */
+export function isValidHttpUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Sanitize chat message content: strip HTML, limit length.
+ */
+export function sanitizeMessageContent(content: string, maxLength: number = 5000): string {
+  if (typeof content !== 'string') return '';
+  return content
+    .replace(/<[^>]*>/g, '')        // strip HTML tags
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '') // strip control chars
+    .trim()
+    .substring(0, maxLength);
 }

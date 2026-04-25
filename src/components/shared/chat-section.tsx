@@ -1061,7 +1061,7 @@ export default function ChatSection({ profile, role }: ChatSectionProps) {
 
   // =====================================================
   // Render message bubble
-  // Own messages LEFT (emerald bg), others RIGHT (muted bg)
+  // Own messages RIGHT/start (emerald bg), others LEFT/end (muted bg)
   // =====================================================
   const renderMessage = (msg: ChatMessage, index: number) => {
     const isOwn = msg.sender_id === profile.id;
@@ -1083,7 +1083,7 @@ export default function ChatSection({ profile, role }: ChatSectionProps) {
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.15 }}
-        className={`flex gap-2 ${isOwn ? 'justify-start' : 'justify-end'} items-end group px-3`}
+        className={`flex gap-2 ${isOwn ? 'justify-end' : 'justify-start'} items-end group px-3`}
       >
         {/* Other user avatar - shown above-left of the message */}
         {!isOwn && (
@@ -1096,7 +1096,7 @@ export default function ChatSection({ profile, role }: ChatSectionProps) {
           </div>
         )}
 
-        <div className={`max-w-[75%] flex flex-col ${isOwn ? 'items-start' : 'items-end'} relative`}>
+        <div className={`max-w-[75%] flex flex-col ${isOwn ? 'items-end' : 'items-start'} relative`}>
           {/* Sender name for group chats */}
           {!isOwn && showAvatar && activeConvInfo?.type === 'group' && (
             <button

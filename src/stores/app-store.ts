@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { AppPage, StudentSection, TeacherSection, CourseTab } from '@/lib/types';
+import type { AppPage, StudentSection, TeacherSection, AdminSection, CourseTab } from '@/lib/types';
 
 interface AppState {
   // Navigation
@@ -21,6 +21,10 @@ interface AppState {
   // Teacher navigation
   teacherSection: TeacherSection;
   setTeacherSection: (section: TeacherSection) => void;
+  
+  // Admin navigation
+  adminSection: AdminSection;
+  setAdminSection: (section: AdminSection) => void;
   
   // Quiz/Summary viewing
   viewingQuizId: string | null;
@@ -59,6 +63,7 @@ const initialState = {
   profileTab: 'files' as string,
   studentSection: 'dashboard' as StudentSection,
   teacherSection: 'dashboard' as TeacherSection,
+  adminSection: 'dashboard' as AdminSection,
   viewingQuizId: null as string | null,
   viewingSummaryId: null as string | null,
   selectedSubjectId: null as string | null,
@@ -71,7 +76,7 @@ const initialState = {
 
 export const useAppStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       ...initialState,
       
       setCurrentPage: (page) => set({ currentPage: page }),
@@ -80,8 +85,9 @@ export const useAppStore = create<AppState>()(
       setProfileTab: (tab) => set({ profileTab: tab }),
       setStudentSection: (section) => set({ studentSection: section }),
       setTeacherSection: (section) => set({ teacherSection: section }),
-      setViewingQuizId: (id) => set({ viewingQuizId: id, currentPage: id ? 'quiz' : 'student-dashboard' }),
-      setViewingSummaryId: (id) => set({ viewingSummaryId: id, currentPage: id ? 'summary' : 'student-dashboard' }),
+      setAdminSection: (section) => set({ adminSection: section }),
+      setViewingQuizId: (id) => set({ viewingQuizId: id, currentPage: id ? 'quiz' : get().currentPage }),
+      setViewingSummaryId: (id) => set({ viewingSummaryId: id, currentPage: id ? 'summary' : get().currentPage }),
       setSelectedSubjectId: (id) => set({ selectedSubjectId: id }),
       setCourseTab: (tab) => set({ courseTab: tab }),
       setSelectedStudentId: (id) => set({ selectedStudentId: id }),
@@ -96,6 +102,7 @@ export const useAppStore = create<AppState>()(
       partialize: (state) => ({
         studentSection: state.studentSection,
         teacherSection: state.teacherSection,
+        adminSection: state.adminSection,
         currentPage: state.currentPage,
         selectedSubjectId: state.selectedSubjectId,
         courseTab: state.courseTab,

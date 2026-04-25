@@ -1,15 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase-server';
+import { requireAuth, getUserRole } from '@/lib/api-security';
 
 // ─── POST: Teacher manually registers a student as present ───
 // Uses service role key to bypass RLS (teacher can't normally insert on behalf of student)
 export async function POST(request: NextRequest) {
   try {
-    const { sessionId, studentId, teacherId } = await request.json();
+    // ── AUTH GATE ──
+    const { user: authUser, error: authError } = await requireAuth(request);
+    if (authError) return authError;
 
-    if (!sessionId || !studentId || !teacherId) {
-      return NextResponse.json({ error: 'sessionId, studentId, and teacherId are required' }, { status: 400 });
+    const { sessionId, studentId } = await request.json();
+
+    if (!sessionId || !studentId) {
+      return NextResponse.json({ error: 'sessionId and studentId are required' }, { status: 400 });
     }
+
+    // ── Use authenticated user as teacherId ──
+    const teacherId = authUser.id;
 
     // Verify the teacher owns this attendance session
     const { data: session, error: sessionError } = await supabaseServer

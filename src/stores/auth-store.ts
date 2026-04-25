@@ -189,6 +189,9 @@ interface AuthState {
 // Cleanup function for session validation interval
 let sessionCheckCleanup: (() => void) | null = null;
 
+// Subscription reference for auth state change listener
+let authSubscription: { data: { subscription: { unsubscribe: () => void } } } | null = null;
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   loading: true,
@@ -219,7 +222,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           const userName = session.user.user_metadata?.full_name || session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'مستخدم';
           const avatarUrl = session.user.user_metadata?.avatar_url || null;
           // Default role is 'student' for all new users
-          const userRole = session.user.user_metadata?.role || 'student';
+          // SECURITY: Always use 'student' as default role — ignore user_metadata.role
+          // to prevent privilege escalation via client-set metadata
+          const userRole = 'student';
           
           const { error: insertError } = await supabase.from('users').insert({
             id: session.user.id,
@@ -305,8 +310,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ user: null, loading: false, initialized: true });
     }
     
+    // Unsubscribe previous auth listener if re-initializing
+    if (authSubscription) authSubscription.data.subscription.unsubscribe();
+
     // Listen for auth changes
-    supabase.auth.onAuthStateChange(async (event, session) => {
+    authSubscription = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'PASSWORD_RECOVERY' && session?.user) {
         // Password recovery flow - don't auto-login, just update the user reference
         // The reset-password form in page.tsx will handle the actual password update
@@ -349,7 +357,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         if (!profile) {
           const userName = session.user.user_metadata?.full_name || session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'مستخدم';
           const avatarUrl = session.user.user_metadata?.avatar_url || null;
-          const userRole = session.user.user_metadata?.role || 'student';
+          // SECURITY: Always use 'student' as default role — ignore user_metadata.role
+          const userRole = 'student';
           
           const { error: insertError } = await supabase.from('users').insert({
             id: session.user.id,
@@ -407,6 +416,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         if (sessionCheckCleanup) {
           sessionCheckCleanup();
           sessionCheckCleanup = null;
+        }
+        // Unsubscribe auth listener on sign out
+        if (authSubscription) {
+          authSubscription.data.subscription.unsubscribe();
+          authSubscription = null;
         }
         set({ user: null, loading: false });
       }
@@ -476,7 +490,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Profile doesn't exist yet - try to create it
       // This handles users who signed up but profile wasn't created (e.g. email confirmation flow)
       const userName = authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'مستخدم';
-      const userRole = authUser.user_metadata?.role || 'student';
+      // SECURITY: Always use 'student' as default role — ignore user_metadata.role
+      const userRole = 'student';
       
       const { error: createError } = await supabase
         .from('users')
@@ -757,6 +772,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (sessionCheckCleanup) {
       sessionCheckCleanup();
       sessionCheckCleanup = null;
+    }
+
+    // Unsubscribe auth listener on sign out
+    if (authSubscription) {
+      authSubscription.data.subscription.unsubscribe();
+      authSubscription = null;
     }
 
     // End session tracking in the background (don't block UI)

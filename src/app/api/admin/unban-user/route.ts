@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase-server';
+import { requireRole } from '@/lib/api-security';
 
 export async function POST(request: NextRequest) {
   try {
+    // ── AUTH GATE: Require admin or superadmin ──
+    const { user: authUser, error: authError } = await requireRole(request, ['admin', 'superadmin']);
+    if (authError) return authError;
+
     const body = await request.json();
     const { email } = body;
 

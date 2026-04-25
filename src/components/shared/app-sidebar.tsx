@@ -14,6 +14,8 @@ import {
   ChevronRight,
   MessageCircle,
   Bell,
+  ClipboardCheck,
+  ClipboardList,
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -75,7 +77,9 @@ const studentNavItems: NavItem[] = [
   { id: 'chat', label: 'المحادثات', icon: <MessageCircle className="h-5 w-5" /> },
   { id: 'teachers', label: 'المعلمون', icon: <Users className="h-5 w-5" /> },
   { id: 'summaries', label: 'الملخصات', icon: <FileText className="h-5 w-5" /> },
+  { id: 'quizzes', label: 'الاختبارات', icon: <ClipboardList className="h-5 w-5" /> },
   { id: 'assignments', label: 'المهام', icon: <FileSpreadsheet className="h-5 w-5" /> },
+  { id: 'attendance', label: 'الحضور والانصراف', icon: <ClipboardCheck className="h-5 w-5" /> },
   { id: 'files', label: 'ملفاتي', icon: <FolderOpen className="h-5 w-5" /> },
   { id: 'notifications', label: 'الإشعارات', icon: <Bell className="h-5 w-5" /> },
   { id: 'settings', label: 'الإعدادات', icon: <Settings className="h-5 w-5" /> },
@@ -86,6 +90,7 @@ const teacherNavItems: NavItem[] = [
   { id: 'subjects', label: 'المقررات', icon: <BookOpen className="h-5 w-5" /> },
   { id: 'chat', label: 'المحادثات', icon: <MessageCircle className="h-5 w-5" /> },
   { id: 'students', label: 'الطلاب', icon: <Users className="h-5 w-5" /> },
+  { id: 'attendance', label: 'الحضور والانصراف', icon: <ClipboardCheck className="h-5 w-5" /> },
   { id: 'files', label: 'ملفاتي', icon: <FolderOpen className="h-5 w-5" /> },
   { id: 'analytics', label: 'التقارير', icon: <TrendingUp className="h-5 w-5" /> },
   { id: 'notifications', label: 'الإشعارات', icon: <Bell className="h-5 w-5" /> },

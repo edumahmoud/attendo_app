@@ -1,15 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase-server';
+import { requireAuth } from '@/lib/api-security';
 
 // ─── POST: Remove a student's attendance records from active sessions ───
 // When a student logs out during an active attendance session, their check-in
 // record is deleted so they are considered absent.
 export async function POST(request: NextRequest) {
   try {
+    // ── AUTH GATE ──
+    const { user: authUser, error: authError } = await requireAuth(request);
+    if (authError) return authError;
+
     const { studentId } = await request.json();
 
     if (!studentId) {
       return NextResponse.json({ error: 'studentId is required' }, { status: 400 });
+    }
+
+    // ── AUTHORIZATION: Only the student themselves can mark themselves absent on logout ──
+    if (studentId !== authUser.id) {
+      return NextResponse.json({ error: 'غير مصرح بهذا الإجراء' }, { status: 403 });
     }
 
     // Find all active attendance sessions

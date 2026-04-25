@@ -183,12 +183,21 @@ interface UserWithMeta extends UserProfile {
 // Main Component
 // -------------------------------------------------------
 export default function AdminDashboard({ profile, onSignOut }: AdminDashboardProps) {
+  // ─── App store ───
+  const { adminSection: storedAdminSection, setAdminSection: storeSetAdminSection, sidebarOpen, setSidebarOpen } = useAppStore();
+
   // ─── Navigation ───
-  const [activeSection, setActiveSection] = useState<AdminSection>('dashboard');
+  const [activeSection, setActiveSection] = useState<AdminSection>(storedAdminSection || 'dashboard');
+
+  // Keep local state in sync when store changes (e.g. settings navigation)
+  useEffect(() => {
+    if (storedAdminSection && storedAdminSection !== activeSection) {
+      setActiveSection(storedAdminSection);
+    }
+  }, [storedAdminSection, activeSection]);
 
   // ─── Auth store ───
   const { updateProfile: authUpdateProfile, signOut: authSignOut } = useAuthStore();
-  const { sidebarOpen, setSidebarOpen } = useAppStore();
 
   // ─── Data state ───
   const [allUsers, setAllUsers] = useState<UserWithMeta[]>([]);
@@ -328,6 +337,7 @@ export default function AdminDashboard({ profile, onSignOut }: AdminDashboardPro
   // -------------------------------------------------------
   const handleSectionChange = (section: string) => {
     setActiveSection(section as AdminSection);
+    storeSetAdminSection(section as AdminSection);
     // Fetch section-specific data
     if (section === 'banned') fetchBannedUsers();
     if (section === 'announcements') fetchAnnouncements();

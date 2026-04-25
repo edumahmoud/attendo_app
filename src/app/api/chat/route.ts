@@ -1,22 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase-server';
+import {
+  requireAuth,
+  verifyConversationParticipant,
+  sanitizeMessageContent,
+  safeErrorResponse,
+} from '@/lib/api-security';
 
 /**
  * Chat API Route
- * 
+ *
  * GET: Fetch conversations or messages
  * POST: Send message, create conversation, mark as read, delete/edit message
+ *
+ * SECURITY: All endpoints require authentication. User IDs are verified
+ * against the authenticated session — client-supplied userId is ignored.
  */
 export async function GET(request: NextRequest) {
+  // ── AUTH GATE ──
+  const { user: authUser, error: authError } = await requireAuth(request);
+  if (authError) return authError;
+  const authenticatedUserId = authUser.id;
+
   const { searchParams } = new URL(request.url);
   const action = searchParams.get('action');
 
   try {
     switch (action) {
       case 'total-unread': {
-        // Lightweight endpoint — just returns the total unread count
-        const userId = searchParams.get('userId');
-        if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 });
+        // Use authenticated user ID — ignore any userId param
+        const userId = authenticatedUserId;
 
         const { data: participations, error: pError } = await supabaseServer
           .from('conversation_participants')
@@ -76,8 +89,8 @@ export async function GET(request: NextRequest) {
       }
 
       case 'conversations': {
-        const userId = searchParams.get('userId');
-        if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 });
+        // Use authenticated user ID — ignore any userId param
+        const userId = authenticatedUserId;
 
         // Step 1: Get all conversation IDs the user is part of
         const { data: participations, error: pError } = await supabaseServer
@@ -87,7 +100,7 @@ export async function GET(request: NextRequest) {
 
         if (pError) {
           console.error('[Chat API] Conversations error:', pError);
-          return NextResponse.json({ error: pError.message }, { status: 500 });
+          return safeErrorResponse('حدث خطأ أثناء جلب المحادثات', 500);
         }
 
         if (!participations || participations.length === 0) {
@@ -108,7 +121,7 @@ export async function GET(request: NextRequest) {
 
         if (convsError) {
           console.error('[Chat API] Conversations fetch error:', convsError);
-          return NextResponse.json({ error: convsError.message }, { status: 500 });
+          return safeErrorResponse('حدث خطأ أثناء جلب المحادثات', 500);
         }
 
         // Clean up orphaned participant entries (conversation deleted but participant record remains)
@@ -123,7 +136,6 @@ export async function GET(request: NextRequest) {
               .eq('conversation_id', orphanId)
               .eq('user_id', userId);
           }
-          console.log(`[Chat API] Cleaned up ${orphanedIds.length} orphaned participant entries for user ${userId}`);
         }
 
         // Step 3: For each conversation, get last message and unread count
@@ -241,9 +253,15 @@ export async function GET(request: NextRequest) {
 
       case 'messages': {
         const conversationId = searchParams.get('conversationId');
-        const limit = parseInt(searchParams.get('limit') || '50');
+        const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100); // Cap limit at 100
 
         if (!conversationId) return NextResponse.json({ error: 'conversationId required' }, { status: 400 });
+
+        // Verify the user is a participant in this conversation
+        const isParticipant = await verifyConversationParticipant(authenticatedUserId, conversationId);
+        if (!isParticipant) {
+          return NextResponse.json({ error: 'أنت لست مشاركاً في هذه المحادثة' }, { status: 403 });
+        }
 
         // Fetch messages
         const { data: messages, error } = await supabaseServer
@@ -255,7 +273,7 @@ export async function GET(request: NextRequest) {
 
         if (error) {
           console.error('[Chat API] Messages error:', error);
-          return NextResponse.json({ error: error.message }, { status: 500 });
+          return safeErrorResponse('حدث خطأ أثناء جلب الرسائل', 500);
         }
 
         // Enrich with sender info
@@ -284,12 +302,26 @@ export async function GET(request: NextRequest) {
           .eq('type', 'group')
           .maybeSingle();
 
+        // Verify the user is a participant if a conversation is found
+        if (data) {
+          const isParticipant = await verifyConversationParticipant(authenticatedUserId, data.id);
+          if (!isParticipant) {
+            return NextResponse.json({ conversation: null });
+          }
+        }
+
         return NextResponse.json({ conversation: data || null });
       }
 
       case 'participants': {
         const conversationId = searchParams.get('conversationId');
         if (!conversationId) return NextResponse.json({ error: 'conversationId required' }, { status: 400 });
+
+        // Verify the user is a participant in this conversation
+        const isParticipant = await verifyConversationParticipant(authenticatedUserId, conversationId);
+        if (!isParticipant) {
+          return NextResponse.json({ error: 'أنت لست مشاركاً في هذه المحادثة' }, { status: 403 });
+        }
 
         const { data: parts } = await supabaseServer
           .from('conversation_participants')
@@ -314,9 +346,40 @@ export async function GET(request: NextRequest) {
       case 'search-users': {
         const subjectId = searchParams.get('subjectId');
         const query = searchParams.get('query');
-        const userId = searchParams.get('userId');
 
         if (!subjectId || !query) return NextResponse.json({ error: 'subjectId and query required' }, { status: 400 });
+
+        // Only allow searching in subjects the user is enrolled in or teaches
+        const { data: enrollment } = await supabaseServer
+          .from('subject_students')
+          .select('student_id')
+          .eq('subject_id', subjectId)
+          .eq('student_id', authenticatedUserId)
+          .maybeSingle();
+
+        const { data: subjectData } = await supabaseServer
+          .from('subjects')
+          .select('teacher_id')
+          .eq('id', subjectId)
+          .single();
+
+        const isTeacher = subjectData?.teacher_id === authenticatedUserId;
+
+        // Check co-teacher
+        let isCoTeacher = false;
+        if (!isTeacher) {
+          const { data: coTeacherEntry } = await supabaseServer
+            .from('subject_teachers')
+            .select('id')
+            .eq('subject_id', subjectId)
+            .eq('teacher_id', authenticatedUserId)
+            .maybeSingle();
+          isCoTeacher = !!coTeacherEntry;
+        }
+
+        if (!enrollment && !isTeacher && !isCoTeacher) {
+          return NextResponse.json({ users: [] });
+        }
 
         // Search users enrolled in the same subject
         const { data: enrollments } = await supabaseServer
@@ -336,12 +399,6 @@ export async function GET(request: NextRequest) {
         }
 
         // Also get the teacher
-        const { data: subjectData } = await supabaseServer
-          .from('subjects')
-          .select('teacher_id')
-          .eq('id', subjectId)
-          .single();
-
         let teacherUser: Record<string, unknown> | null = null;
         if (subjectData?.teacher_id) {
           const { data } = await supabaseServer
@@ -357,7 +414,7 @@ export async function GET(request: NextRequest) {
           teacherUser,
         ]
           .filter(Boolean)
-          .filter((u: Record<string, unknown>) => u.id !== userId)
+          .filter((u: Record<string, unknown>) => u.id !== authenticatedUserId)
           .filter((u: Record<string, unknown>) =>
             (u.name as string || '').toLowerCase().includes(query.toLowerCase()) ||
             (u.email as string || '').toLowerCase().includes(query.toLowerCase())
@@ -374,29 +431,46 @@ export async function GET(request: NextRequest) {
     }
   } catch (error) {
     console.error('[Chat API] GET error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return safeErrorResponse('Internal server error', 500);
   }
 }
 
 export async function POST(request: NextRequest) {
+  // ── AUTH GATE ──
+  const { user: authUser, error: authError } = await requireAuth(request);
+  if (authError) return authError;
+  const authenticatedUserId = authUser.id;
+
   try {
     const body = await request.json();
     const { action } = body;
 
     switch (action) {
       case 'send-message': {
-        const { conversationId, senderId, content } = body;
-        if (!conversationId || !senderId || !content) {
+        const { conversationId, content } = body;
+        if (!conversationId || !content) {
           return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
-        // Insert message
+        // Verify the user is a participant in this conversation
+        const isParticipant = await verifyConversationParticipant(authenticatedUserId, conversationId);
+        if (!isParticipant) {
+          return NextResponse.json({ error: 'أنت لست مشاركاً في هذه المحادثة' }, { status: 403 });
+        }
+
+        // Sanitize message content
+        const sanitizedContent = sanitizeMessageContent(content);
+        if (!sanitizedContent) {
+          return NextResponse.json({ error: 'محتوى الرسالة فارغ' }, { status: 400 });
+        }
+
+        // Insert message using authenticated user as sender
         const { data: message, error: msgError } = await supabaseServer
           .from('messages')
           .insert({
             conversation_id: conversationId,
-            sender_id: senderId,
-            content: content.trim(),
+            sender_id: authenticatedUserId,
+            content: sanitizedContent,
           })
           .select()
           .single();
@@ -416,17 +490,20 @@ export async function POST(request: NextRequest) {
         const { data: sender } = await supabaseServer
           .from('users')
           .select('id, name, email, avatar_url, title_id, gender, role')
-          .eq('id', senderId)
+          .eq('id', authenticatedUserId)
           .single();
 
         return NextResponse.json({ message, sender: sender || null });
       }
 
       case 'create-individual': {
-        const { userId1, userId2, subjectId } = body;
-        if (!userId1 || !userId2) {
+        const { userId2, subjectId } = body;
+        if (!userId2) {
           return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
+
+        // Use authenticated user as userId1 — ignore client-supplied senderId
+        const userId1 = authenticatedUserId;
 
         // Check if conversation already exists between these two users
         const { data: existingParts } = await supabaseServer
@@ -490,16 +567,22 @@ export async function POST(request: NextRequest) {
       }
 
       case 'mark-read': {
-        const { conversationId, userId } = body;
-        if (!conversationId || !userId) {
+        const { conversationId } = body;
+        if (!conversationId) {
           return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+        }
+
+        // Verify the user is a participant in this conversation
+        const isParticipant = await verifyConversationParticipant(authenticatedUserId, conversationId);
+        if (!isParticipant) {
+          return NextResponse.json({ error: 'أنت لست مشاركاً في هذه المحادثة' }, { status: 403 });
         }
 
         await supabaseServer
           .from('conversation_participants')
           .update({ last_read_at: new Date().toISOString() })
           .eq('conversation_id', conversationId)
-          .eq('user_id', userId);
+          .eq('user_id', authenticatedUserId);
 
         return NextResponse.json({ success: true });
       }
@@ -508,6 +591,33 @@ export async function POST(request: NextRequest) {
         const { subjectId, teacherId } = body;
         if (!subjectId) {
           return NextResponse.json({ error: 'subjectId required' }, { status: 400 });
+        }
+
+        // Verify the user is the teacher or co-teacher of this subject
+        const { data: subjectData } = await supabaseServer
+          .from('subjects')
+          .select('teacher_id')
+          .eq('id', subjectId)
+          .single();
+
+        if (!subjectData) {
+          return NextResponse.json({ error: 'المقرر غير موجود' }, { status: 404 });
+        }
+
+        const isTeacher = subjectData.teacher_id === authenticatedUserId;
+        let isCoTeacher = false;
+        if (!isTeacher) {
+          const { data: coTeacherEntry } = await supabaseServer
+            .from('subject_teachers')
+            .select('id')
+            .eq('subject_id', subjectId)
+            .eq('teacher_id', authenticatedUserId)
+            .maybeSingle();
+          isCoTeacher = !!coTeacherEntry;
+        }
+
+        if (!isTeacher && !isCoTeacher) {
+          return NextResponse.json({ error: 'غير مصرح بالوصول' }, { status: 403 });
         }
 
         // Check if group conversation exists
@@ -547,12 +657,10 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'فشل إنشاء محادثة المقرر' }, { status: 500 });
         }
 
-        // Add teacher as participant
-        if (teacherId) {
-          await supabaseServer
-            .from('conversation_participants')
-            .insert({ conversation_id: newConv.id, user_id: teacherId });
-        }
+        // Add teacher as participant (use authenticated user, ignore client-supplied teacherId)
+        await supabaseServer
+          .from('conversation_participants')
+          .insert({ conversation_id: newConv.id, user_id: authenticatedUserId });
 
         // Add all enrolled students as participants
         const { data: students } = await supabaseServer
@@ -574,8 +682,8 @@ export async function POST(request: NextRequest) {
       }
 
       case 'delete-message': {
-        const { messageId, userId } = body;
-        if (!messageId || !userId) {
+        const { messageId } = body;
+        if (!messageId) {
           return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
@@ -590,7 +698,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'الرسالة غير موجودة' }, { status: 404 });
         }
 
-        if (msg.sender_id !== userId) {
+        if (msg.sender_id !== authenticatedUserId) {
           return NextResponse.json({ error: 'لا يمكنك حذف رسالة لا تخصك' }, { status: 403 });
         }
 
@@ -629,8 +737,8 @@ export async function POST(request: NextRequest) {
       }
 
       case 'edit-message': {
-        const { messageId, userId, content } = body;
-        if (!messageId || !userId || !content?.trim()) {
+        const { messageId, content } = body;
+        if (!messageId || !content?.trim()) {
           return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
@@ -645,7 +753,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'الرسالة غير موجودة' }, { status: 404 });
         }
 
-        if (msg.sender_id !== userId) {
+        if (msg.sender_id !== authenticatedUserId) {
           return NextResponse.json({ error: 'لا يمكنك تعديل رسالة لا تخصك' }, { status: 403 });
         }
 
@@ -653,11 +761,14 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'لا يمكنك تعديل رسالة محذوفة' }, { status: 400 });
         }
 
+        // Sanitize edited content
+        const sanitizedContent = sanitizeMessageContent(content);
+
         // Try to update with is_edited column
         const { error: updateError } = await supabaseServer
           .from('messages')
           .update({
-            content: content.trim(),
+            content: sanitizedContent,
             is_edited: true,
           })
           .eq('id', messageId);
@@ -666,28 +777,22 @@ export async function POST(request: NextRequest) {
         if (updateError) {
           await supabaseServer
             .from('messages')
-            .update({ content: content.trim() })
+            .update({ content: sanitizedContent })
             .eq('id', messageId);
         }
 
-        return NextResponse.json({ success: true, messageId, content: content.trim() });
+        return NextResponse.json({ success: true, messageId, content: sanitizedContent });
       }
 
       case 'delete-conversation': {
-        const { conversationId, userId } = body;
-        if (!conversationId || !userId) {
+        const { conversationId } = body;
+        if (!conversationId) {
           return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
         // Verify the user is a participant
-        const { data: participation } = await supabaseServer
-          .from('conversation_participants')
-          .select('user_id')
-          .eq('conversation_id', conversationId)
-          .eq('user_id', userId)
-          .single();
-
-        if (!participation) {
+        const isParticipant = await verifyConversationParticipant(authenticatedUserId, conversationId);
+        if (!isParticipant) {
           return NextResponse.json({ error: 'أنت لست مشاركاً في هذه المحادثة' }, { status: 403 });
         }
 
@@ -717,6 +822,6 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     console.error('[Chat API] POST error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return safeErrorResponse('Internal server error', 500);
   }
 }

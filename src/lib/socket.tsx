@@ -121,9 +121,16 @@ export function getSocket(): Socket {
     // ─── Auto-authenticate on every (re)connect ───
     socketInstance.on('connect', () => {
       if (authCredentials) {
-        socketInstance!.emit('auth', {
-          userId: authCredentials.userId,
-          userName: authCredentials.userName,
+        // Get the current Supabase session token for server-side verification
+        import('@/lib/supabase').then(({ supabase }) => {
+          supabase.auth.getSession().then(({ data: { session } }) => {
+            const token = session?.access_token;
+            socketInstance!.emit('auth', {
+              userId: authCredentials!.userId,
+              userName: authCredentials!.userName,
+              token,
+            });
+          });
         });
       }
     });
@@ -141,14 +148,15 @@ export function getSocket(): Socket {
  * Set the authentication credentials used for auto-auth on
  * connect and reconnect. Call this once the user is known
  * (e.g. after login or profile load).
+ * SECURITY: Also sends the Supabase access token for server-side verification.
  */
-export function setSocketAuth(userId: string, userName: string): void {
+export function setSocketAuth(userId: string, userName: string, accessToken?: string): void {
   authCredentials = { userId, userName };
 
   // If socket is already connected, re-auth immediately
   const socket = getSocket();
   if (socket.connected) {
-    socket.emit('auth', { userId, userName });
+    socket.emit('auth', { userId, userName, token: accessToken });
   }
 }
 

@@ -5,8 +5,11 @@ const httpServer = createServer();
 const io = new Server(httpServer, {
   path: '/',
   cors: {
-    origin: '*',
+    // SECURITY: Restrict to known frontend origins instead of '*'
+    // In production, set CHAT_CORS_ORIGINS to your domain(s) comma-separated
+    origin: (process.env.CHAT_CORS_ORIGINS || 'http://localhost:3000').split(','),
     methods: ['GET', 'POST'],
+    credentials: true,
   },
   pingTimeout: 60000,
   pingInterval: 25000,
@@ -97,8 +100,28 @@ io.on('connection', (socket) => {
   console.log(`[Chat] Connected: ${socket.id}`);
 
   // ─── Authenticate ───
-  socket.on('auth', (data: { userId: string; userName: string }) => {
-    const { userId, userName } = data;
+  // SECURITY WARNING: This socket auth is inherently weak — it accepts
+  // any userId/userName without server-side token verification.
+  // For production, implement token-based auth:
+  //   1. Client sends Supabase access token with auth event
+  //   2. Server verifies token via Supabase API before accepting
+  // For now, at least track which sockets have authenticated
+  socket.on('auth', (data: { userId: string; userName: string; token?: string }) => {
+    const { userId, userName, token } = data;
+
+    // Basic validation: reject empty values
+    if (!userId || !userName || userId.length > 100 || userName.length > 100) {
+      console.warn(`[Chat] Invalid auth data from ${socket.id}`);
+      socket.emit('auth-error', { message: 'Invalid credentials' });
+      return;
+    }
+
+    // TODO: Verify Supabase token for real authentication:
+    // if (token) { verify with supabase auth API } else { reject }
+    // For now, log a warning that auth is not verified
+    if (!token) {
+      console.warn(`[Chat] Unverified auth from ${socket.id}: userId=${userId}`);
+    }
 
     const wasOffline = !userSockets.has(userId);
 
@@ -196,6 +219,7 @@ io.on('connection', (socket) => {
   });
 
   // ─── Send Message ───
+  // SECURITY: Verify sender is authenticated on this socket
   socket.on('send-message', (data: {
     conversationId: string;
     senderId: string;
@@ -209,6 +233,17 @@ io.on('connection', (socket) => {
     senderTitleId?: string;
     senderGender?: string;
   }) => {
+    // SECURITY: Verify this socket belongs to the claimed sender
+    const onlineUser = onlineUsers.get(socket.id);
+    if (!onlineUser || onlineUser.id !== data.senderId) {
+      console.warn(`[Chat] Message rejected: socket ${socket.id} claimed senderId=${data.senderId} but authed as ${onlineUser?.id || 'unknown'}`);
+      return;
+    }
+    // SECURITY: Limit message content length
+    if (data.content && data.content.length > 5000) {
+      console.warn(`[Chat] Message rejected: content too long (${data.content.length} chars)`);
+      return;
+    }
     const now = new Date().toISOString();
     // Build message with BOTH camelCase and snake_case fields for client compatibility
     const message = {

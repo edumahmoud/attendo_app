@@ -1,6 +1,7 @@
 import { createBrowserClient } from '@supabase/ssr';
 
-const supabasePublishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_zOn0U6HWMiINle9g7IshIw_bOOYNtRm';
+// SECURITY: Do not hardcode keys as fallbacks — use env vars only
+const supabasePublishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || '';
 
 export const isSupabaseConfigured =
   !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

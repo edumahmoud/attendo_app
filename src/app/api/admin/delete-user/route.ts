@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase-server';
+import { requireRole } from '@/lib/api-security';
 
 export async function POST(request: NextRequest) {
   try {
+    // ── AUTH GATE: Require admin or superadmin ──
+    const { user: authUser, error: authError } = await requireRole(request, ['admin', 'superadmin']);
+    if (authError) return authError;
+
     const body = await request.json();
     const { userId } = body;
 
@@ -10,6 +15,44 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'معرف المستخدم مطلوب' },
         { status: 400 }
+      );
+    }
+
+    // Prevent self-deletion
+    if (userId === authUser.id) {
+      return NextResponse.json(
+        { success: false, error: 'لا يمكنك حذف حسابك الخاص' },
+        { status: 400 }
+      );
+    }
+
+    // Get the requester's role
+    const { data: requesterProfile } = await supabaseServer
+      .from('users')
+      .select('role')
+      .eq('id', authUser.id)
+      .single();
+
+    // Get the target user's role
+    const { data: targetProfile } = await supabaseServer
+      .from('users')
+      .select('role')
+      .eq('id', userId)
+      .single();
+
+    // Admin cannot delete superadmin
+    if (targetProfile?.role === 'superadmin' && requesterProfile?.role !== 'superadmin') {
+      return NextResponse.json(
+        { success: false, error: 'لا يمكنك حذف مدير المنصة' },
+        { status: 403 }
+      );
+    }
+
+    // Admin cannot delete other admins
+    if (targetProfile?.role === 'admin' && requesterProfile?.role === 'admin') {
+      return NextResponse.json(
+        { success: false, error: 'لا يمكنك حذف مشرف آخر' },
+        { status: 403 }
       );
     }
 
