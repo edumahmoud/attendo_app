@@ -11,6 +11,7 @@ import { SocketProvider, setSocketAuth, destroySocket } from '@/lib/socket';
 import LoginForm from '@/components/auth/login-form';
 import RegisterForm from '@/components/auth/register-form';
 import ForgotPasswordForm from '@/components/auth/forgot-password-form';
+import ResetPasswordForm from '@/components/auth/reset-password-form';
 import AppHeader from '@/components/shared/app-header';
 import SetupWizard from '@/components/setup/setup-wizard';
 
@@ -22,7 +23,7 @@ const QuizView = dynamic(() => import('@/components/shared/quiz-view'), { ssr: f
 const SummaryView = dynamic(() => import('@/components/shared/summary-view'), { ssr: false });
 const UserProfilePage = dynamic(() => import('@/components/shared/user-profile-page'), { ssr: false });
 
-type AuthMode = 'login' | 'register' | 'forgot-password';
+type AuthMode = 'login' | 'register' | 'forgot-password' | 'reset-password';
 
 function HomeContent() {
   const { user, loading, initialized, initialize, signOut, sessionKickedMessage } = useAuthStore();
@@ -69,14 +70,25 @@ function HomeContent() {
     checkSetupStatus();
   }, [checkSetupStatus]);
 
-  // Handle OAuth callback parameters
+  // Handle OAuth callback parameters and password reset
   useEffect(() => {
     const authError = searchParams.get('auth_error');
     const newUser = searchParams.get('new_user');
+    const mode = searchParams.get('mode');
 
     if (authError) {
       // Clean the URL
       window.history.replaceState({}, '', '/');
+    }
+
+    // Password reset mode - show the new password form
+    if (mode === 'reset-password') {
+      setAuthMode('reset-password');
+      // Clean the URL after a short delay to keep the mode visible
+      setTimeout(() => {
+        window.history.replaceState({}, '', '/');
+      }, 100);
+      return;
     }
 
     if (newUser && user) {
@@ -99,6 +111,9 @@ function HomeContent() {
     // Don't redirect away from the setup wizard while it's in progress
     if (wizardInProgress) return;
 
+    // Don't redirect away from the password reset form
+    if (authMode === 'reset-password') return;
+
     if (user) {
       if (currentPage === 'auth') {
         setCurrentPage(
@@ -112,7 +127,7 @@ function HomeContent() {
     } else {
       setCurrentPage('auth');
     }
-  }, [user, initialized, currentPage, setCurrentPage, wizardInProgress]);
+  }, [user, initialized, currentPage, setCurrentPage, wizardInProgress, authMode]);
 
   // Show auth error toast if present in URL
   useEffect(() => {
@@ -174,8 +189,9 @@ function HomeContent() {
     return <SetupWizard onComplete={handleSetupComplete} onStart={handleWizardStart} />;
   }
 
-  // Auth pages (login / register)
-  if (!user || currentPage === 'auth') {
+  // Auth pages (login / register / reset-password)
+  // Also show auth when in reset-password mode (user has temporary recovery session)
+  if (!user || currentPage === 'auth' || authMode === 'reset-password') {
     return (
       <div className="min-h-screen flex flex-col justify-start pt-6 px-4 pb-4 sm:flex sm:items-center sm:justify-center sm:p-4 bg-gradient-to-br from-emerald-600 to-teal-700" dir="rtl">
         {/* Background decoration */}
@@ -238,7 +254,7 @@ function HomeContent() {
               >
                 <RegisterForm onSwitchToLogin={() => setAuthMode('login')} />
               </motion.div>
-            ) : (
+            ) : authMode === 'forgot-password' ? (
               <motion.div
                 key="forgot-password"
                 initial={{ opacity: 0, x: 30 }}
@@ -247,6 +263,16 @@ function HomeContent() {
                 transition={{ duration: 0.3 }}
               >
                 <ForgotPasswordForm onBackToLogin={() => setAuthMode('login')} />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="reset-password"
+                initial={{ opacity: 0, x: 30 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -30 }}
+                transition={{ duration: 0.3 }}
+              >
+                <ResetPasswordForm onComplete={() => setAuthMode('login')} />
               </motion.div>
             )}
           </AnimatePresence>

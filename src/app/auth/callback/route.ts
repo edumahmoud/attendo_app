@@ -8,6 +8,9 @@ export async function GET(request: NextRequest) {
   // If there's an error from the OAuth provider
   const error = searchParams.get('error');
   const errorDescription = searchParams.get('error_description');
+  // Check for password recovery type
+  const type = searchParams.get('type');
+  const next = searchParams.get('next');
 
   if (error) {
     console.error('OAuth error:', error, errorDescription);
@@ -61,6 +64,17 @@ export async function GET(request: NextRequest) {
   if (exchangeError) {
     console.error('Code exchange error:', exchangeError.message);
     return NextResponse.redirect(`${origin}?auth_error=${encodeURIComponent('فشل في التحقق من الهوية')}`);
+  }
+
+  // If this is a password recovery flow, redirect to the reset password page
+  if (type === 'recovery' || next === '/reset-password') {
+    redirectUrl = `${origin}?mode=reset-password`;
+    response = NextResponse.redirect(redirectUrl);
+    // Copy all cookies that were set during the exchange from the request
+    request.cookies.getAll().forEach((cookie) => {
+      response.cookies.set(cookie.name, cookie.value);
+    });
+    return response;
   }
 
   // Get the user from the session

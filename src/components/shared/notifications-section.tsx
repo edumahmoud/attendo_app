@@ -96,11 +96,11 @@ export default function NotificationsSection() {
       return;
     }
 
-    // Handle file_request notifications (owner received a new file request) - navigate to own profile
+    // Handle file_request notifications (owner received a new file request) - navigate to own profile requests tab
     // Type can be 'file' or 'file_request' (depends on DB constraint), link format: 'file_request:REQUESTER_ID'
     if (notif.type === 'file_request' || notif.link?.startsWith('file_request:')) {
       const { openProfile } = useAppStore.getState();
-      if (user?.id) openProfile(user.id);
+      if (user?.id) openProfile(user.id, 'requests');
       return;
     }
 
@@ -122,14 +122,56 @@ export default function NotificationsSection() {
       return;
     }
 
-    // Handle assignment links - navigate to assignments section
+    // Handle assignment links - navigate to the specific subject's assignments tab (course page)
     if (notif.link?.startsWith('assignment:')) {
-      if (user?.role === 'student') {
-        setStudentSection('assignments');
-        setCurrentPage('student-dashboard');
-      } else if (user?.role === 'teacher' || user?.role === 'admin' || user?.role === 'superadmin') {
-        setTeacherSection('assignments');
-        setCurrentPage('teacher-dashboard');
+      const subjectId = notif.link.includes(':') ? notif.link.split(':')[1] : null;
+      if (subjectId) {
+        const { setSelectedSubjectId, setCourseTab, setStudentSection, setTeacherSection, setCurrentPage } = useAppStore.getState();
+        setSelectedSubjectId(subjectId);
+        setCourseTab('assignments');
+        if (user?.role === 'student') {
+          setStudentSection('subjects');
+          setCurrentPage('student-dashboard');
+        } else if (user?.role === 'teacher' || user?.role === 'admin' || user?.role === 'superadmin') {
+          setTeacherSection('subjects');
+          setCurrentPage('teacher-dashboard');
+        }
+      } else {
+        // Fallback: no subject ID, just navigate to assignments section
+        if (user?.role === 'student') {
+          setStudentSection('assignments');
+          setCurrentPage('student-dashboard');
+        } else if (user?.role === 'teacher' || user?.role === 'admin' || user?.role === 'superadmin') {
+          setTeacherSection('assignments');
+          setCurrentPage('teacher-dashboard');
+        }
+      }
+      return;
+    }
+
+    // Handle grade links - navigate to the specific subject's assignments tab (course page)
+    if (notif.type === 'grade' || notif.link?.startsWith('grade:')) {
+      const subjectId = notif.link?.startsWith('grade:') ? notif.link.split(':')[1] : null;
+      if (subjectId) {
+        const { setSelectedSubjectId, setCourseTab, setStudentSection, setTeacherSection, setCurrentPage } = useAppStore.getState();
+        setSelectedSubjectId(subjectId);
+        setCourseTab('assignments');
+        if (user?.role === 'student') {
+          setStudentSection('subjects');
+          setCurrentPage('student-dashboard');
+        } else if (user?.role === 'teacher' || user?.role === 'admin' || user?.role === 'superadmin') {
+          setTeacherSection('subjects');
+          setCurrentPage('teacher-dashboard');
+        }
+      } else {
+        // No subject ID, navigate to assignments section
+        if (user?.role === 'student') {
+          setStudentSection('assignments');
+          setCurrentPage('student-dashboard');
+        } else if (user?.role === 'teacher' || user?.role === 'admin' || user?.role === 'superadmin') {
+          setTeacherSection('assignments');
+          setCurrentPage('teacher-dashboard');
+        }
       }
       return;
     }
@@ -147,7 +189,7 @@ export default function NotificationsSection() {
     // Handle legacy file request notification (link = 'settings')
     if (notif.type === 'file' && notif.link === 'settings' && notif.title?.includes('طلب ملف')) {
       const { openProfile } = useAppStore.getState();
-      if (user?.id) openProfile(user.id);
+      if (user?.id) openProfile(user.id, 'requests');
       return;
     }
 

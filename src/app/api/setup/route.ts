@@ -178,6 +178,71 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, action: 'created', via: 'direct' });
     }
 
+    // ─── Action: Auto-create institution_settings table ───
+    if (action === 'create_table') {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+      if (!supabaseUrl || !supabaseServiceKey) {
+        return NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY غير مُعد' }, { status: 500 });
+      }
+
+      try {
+        // Use Supabase REST API to execute SQL via rpc - we create a setup function first
+        // Direct DDL is not possible via REST, so we use the pg_net extension or direct approach
+        // Instead, we'll try to insert into the table - if it fails, the table doesn't exist
+        // and we'll need to guide the user, but first let's try the most common approach:
+        // Use the management API to run SQL
+
+        // Attempt 1: Try to insert a test row to check if table exists
+        const { error: testError } = await supabaseServer
+          .from('institution_settings')
+          .select('id')
+          .limit(1);
+
+        if (!testError) {
+          return NextResponse.json({ success: true, tableExists: true });
+        }
+
+        // Table doesn't exist - try to create it via SQL execution
+        // Use Supabase's /rest/v1/rpc endpoint with service role
+        const migrationSQL = getMigrationSQL();
+
+        // Execute via Supabase SQL API
+        const sqlResponse = await fetch(`${supabaseUrl}/rest/v1/rpc/setup_run_migration`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': supabaseServiceKey,
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({ sql: migrationSQL }),
+        });
+
+        if (sqlResponse.ok) {
+          return NextResponse.json({ success: true, tableExists: true });
+        }
+
+        // RPC not available - return the SQL for manual execution
+        return NextResponse.json({
+          success: false,
+          tableExists: false,
+          error: 'لا يمكن إنشاء الجدول تلقائياً. يرجى تنفيذ SQL يدوياً.',
+          sql: migrationSQL,
+          needsManualSetup: true,
+        });
+      } catch (err) {
+        console.error('[setup] create_table error:', err);
+        return NextResponse.json({
+          success: false,
+          tableExists: false,
+          error: 'حدث خطأ أثناء إنشاء الجدول',
+          sql: getMigrationSQL(),
+          needsManualSetup: true,
+        });
+      }
+    }
+
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
   } catch (err) {
     console.error('[setup] Error:', err);

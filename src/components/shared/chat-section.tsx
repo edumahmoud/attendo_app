@@ -27,6 +27,16 @@ import { toast } from 'sonner';
 import type { UserProfile, Conversation, ChatMessage } from '@/lib/types';
 import UserAvatar, { formatNameWithTitle } from '@/components/shared/user-avatar';
 import { useAppStore } from '@/stores/app-store';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 // =====================================================
 // Props
@@ -154,6 +164,9 @@ export default function ChatSection({ profile, role }: ChatSectionProps) {
 
   // ─── Message action menu ───
   const [messageMenuId, setMessageMenuId] = useState<string | null>(null);
+
+  // ─── Delete message confirmation dialog ───
+  const [deleteMessageId, setDeleteMessageId] = useState<string | null>(null);
 
   // ─── Conversation list filter ───
   const [convFilter, setConvFilter] = useState('');
@@ -772,6 +785,7 @@ export default function ChatSection({ profile, role }: ChatSectionProps) {
   // =====================================================
   const handleDeleteMessage = async (msgId: string) => {
     setMessageMenuId(null);
+    setDeleteMessageId(null); // Close confirmation dialog
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
@@ -779,10 +793,14 @@ export default function ChatSection({ profile, role }: ChatSectionProps) {
         body: JSON.stringify({ action: 'delete-message', messageId: msgId, userId: profile.id }),
       });
       const data = await res.json();
-      if (data.error) {
-        toast.error(data.error);
-        return;
+
+      // Check for HTTP errors or API errors BEFORE updating local state
+      if (!res.ok || data.error) {
+        toast.error(data.error || 'فشل حذف الرسالة');
+        return; // Do NOT mark as deleted locally if API failed
       }
+
+      // Only update local state after confirmed success
       setMessages((prev) =>
         prev.map((m) =>
           m.id === msgId ? { ...m, content: 'تم حذف هذه الرسالة', is_deleted: true } : m
@@ -795,6 +813,7 @@ export default function ChatSection({ profile, role }: ChatSectionProps) {
     } catch (err) {
       console.error('Delete message error:', err);
       toast.error('فشل حذف الرسالة');
+      // Do NOT update local state — the message was not deleted on the server
     }
   };
 
@@ -1153,7 +1172,10 @@ export default function ChatSection({ profile, role }: ChatSectionProps) {
                             تعديل
                           </button>
                           <button
-                            onClick={() => handleDeleteMessage(msg.id)}
+                            onClick={() => {
+                              setMessageMenuId(null);
+                              setDeleteMessageId(msg.id);
+                            }}
                             className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-600 hover:bg-red-50 transition-colors text-right"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -1208,11 +1230,6 @@ export default function ChatSection({ profile, role }: ChatSectionProps) {
       
       // Remove from local state
       setConversations((prev) => prev.filter((c) => c.id !== activeConvId));
-      setLocalUnread((prev) => {
-        const next = new Map(prev);
-        next.delete(activeConvId);
-        return next;
-      });
       
       // Reset active conversation
       setActiveConvId(null);
@@ -1266,6 +1283,7 @@ export default function ChatSection({ profile, role }: ChatSectionProps) {
   // Main render
   // =====================================================
   return (
+    <>
     <motion.div
       variants={containerVariants}
       initial="hidden"
@@ -1752,5 +1770,31 @@ export default function ChatSection({ profile, role }: ChatSectionProps) {
         )}
       </AnimatePresence>
     </motion.div>
+
+    {/* ============================================ */}
+    {/* DELETE MESSAGE CONFIRMATION DIALOG            */}
+    {/* ============================================ */}
+    <AlertDialog open={!!deleteMessageId} onOpenChange={(open) => { if (!open) setDeleteMessageId(null); }}>
+      <AlertDialogContent dir="rtl">
+        <AlertDialogHeader>
+          <AlertDialogTitle>حذف الرسالة</AlertDialogTitle>
+          <AlertDialogDescription>
+            هل أنت متأكد من حذف هذه الرسالة؟ لا يمكن التراجع عن هذا الإجراء.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>إلغاء</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => {
+              if (deleteMessageId) handleDeleteMessage(deleteMessageId);
+            }}
+            className="bg-rose-600 text-white hover:bg-rose-700 focus:ring-rose-600"
+          >
+            حذف
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }

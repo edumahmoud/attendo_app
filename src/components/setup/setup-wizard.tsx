@@ -305,6 +305,10 @@ export default function SetupWizard({ onComplete, onStart }: SetupWizardProps) {
 
   // ─── Render Step 0: DB Migration ───
   const renderMigrationStep = () => {
+    const [autoCreating, setAutoCreating] = useState(false);
+    const [autoCreateFailed, setAutoCreateFailed] = useState(false);
+    const [showSQL, setShowSQL] = useState(false);
+
     const migrationSQL = `-- انسخ هذا الكود وشغّله في محرر SQL في لوحة تحكم Supabase
 -- (Dashboard → SQL Editor → New Query)
 -- ثم اضغط "تم تنفيذ SQL" للاستمرار
@@ -387,6 +391,36 @@ BEGIN
 END;
 $$;`;
 
+    const handleAutoCreate = async () => {
+      setAutoCreating(true);
+      try {
+        const res = await fetch('/api/setup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'create_table' }),
+        });
+        const data = await res.json();
+
+        if (data.success && data.tableExists) {
+          setTableExists(true);
+          setStep('admin-account');
+          toast.success('تم إنشاء الجدول بنجاح');
+          return;
+        }
+
+        // Auto-create failed, show SQL for manual execution
+        setAutoCreateFailed(true);
+        setShowSQL(true);
+        toast.error('لم يتم إنشاء الجدول تلقائياً. يرجى تنفيذ SQL يدوياً.');
+      } catch {
+        setAutoCreateFailed(true);
+        setShowSQL(true);
+        toast.error('حدث خطأ أثناء إنشاء الجدول');
+      } finally {
+        setAutoCreating(false);
+      }
+    };
+
     const handleCheckTable = async () => {
       setCheckingMigration(true);
       try {
@@ -423,45 +457,87 @@ $$;`;
           <p className="text-emerald-100 mt-2 text-sm">يجب إنشاء جدول المؤسسة في قاعدة البيانات قبل البدء</p>
         </div>
 
-        <div className="rounded-xl bg-amber-500/20 border border-amber-400/30 p-3 text-xs text-amber-100 flex items-start gap-2">
-          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-          <span>انسخ كود SQL التالي ثم شغّله في محرر SQL في لوحة تحكم Supabase (Dashboard → SQL Editor → New Query)</span>
-        </div>
+        {/* Auto-create button */}
+        {!showSQL && (
+          <>
+            <div className="rounded-xl bg-emerald-500/20 border border-emerald-400/30 p-3 text-xs text-emerald-100 flex items-start gap-2">
+              <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+              <span>يمكن محاولة إنشاء الجدول تلقائياً. اضغط الزر أدناه للبدء.</span>
+            </div>
 
-        <div className="relative">
-          <pre className="rounded-xl bg-black/30 border border-white/10 p-4 text-xs text-emerald-200 overflow-x-auto max-h-64 overflow-y-auto font-mono" dir="ltr">
-            {migrationSQL}
-          </pre>
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => {
-              navigator.clipboard.writeText(migrationSQL);
-              toast.success('تم نسخ كود SQL');
-            }}
-            className="absolute top-2 left-2 bg-white/20 hover:bg-white/30 text-white border-0 text-xs"
-          >
-            نسخ
-          </Button>
-        </div>
+            <Button
+              onClick={handleAutoCreate}
+              disabled={autoCreating}
+              className="w-full h-12 text-base font-bold bg-gradient-to-l from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 shadow-lg shadow-amber-500/25 transition-all duration-300 rounded-xl"
+            >
+              {autoCreating ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span>جارٍ إنشاء الجدول...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-5 w-5 ml-1" />
+                  <span>إنشاء الجدول تلقائياً</span>
+                </>
+              )}
+            </Button>
 
-        <Button
-          onClick={handleCheckTable}
-          disabled={checkingMigration}
-          className="w-full h-12 text-base font-bold bg-gradient-to-l from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 shadow-lg shadow-amber-500/25 transition-all duration-300 rounded-xl"
-        >
-          {checkingMigration ? (
-            <>
-              <Loader2 className="h-5 w-5 animate-spin" />
-              <span>جارٍ التحقق...</span>
-            </>
-          ) : (
-            <>
-              <CheckCircle2 className="h-5 w-5 ml-1" />
-              <span>تم تنفيذ SQL - تحقق</span>
-            </>
-          )}
-        </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowSQL(true)}
+              className="w-full border-white/30 text-white hover:bg-white/10"
+            >
+              إنشاء يدوي (تنفيذ SQL)
+            </Button>
+          </>
+        )}
+
+        {/* Manual SQL execution */}
+        {showSQL && (
+          <>
+            <div className="rounded-xl bg-amber-500/20 border border-amber-400/30 p-3 text-xs text-amber-100 flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+              <span>انسخ كود SQL التالي ثم شغّله في محرر SQL في لوحة تحكم Supabase (Dashboard → SQL Editor → New Query)</span>
+            </div>
+
+            <div className="relative">
+              <pre className="rounded-xl bg-black/30 border border-white/10 p-4 text-xs text-emerald-200 overflow-x-auto max-h-64 overflow-y-auto font-mono" dir="ltr">
+                {migrationSQL}
+              </pre>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => {
+                  navigator.clipboard.writeText(migrationSQL);
+                  toast.success('تم نسخ كود SQL');
+                }}
+                className="absolute top-2 left-2 bg-white/20 hover:bg-white/30 text-white border-0 text-xs"
+              >
+                نسخ
+              </Button>
+            </div>
+
+            <Button
+              onClick={handleCheckTable}
+              disabled={checkingMigration}
+              className="w-full h-12 text-base font-bold bg-gradient-to-l from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 shadow-lg shadow-amber-500/25 transition-all duration-300 rounded-xl"
+            >
+              {checkingMigration ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span>جارٍ التحقق...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-5 w-5 ml-1" />
+                  <span>تم تنفيذ SQL - تحقق</span>
+                </>
+              )}
+            </Button>
+          </>
+        )}
       </motion.div>
     );
   };

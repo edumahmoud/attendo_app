@@ -346,3 +346,103 @@ Stage Summary:
 - No more false notifications when opening a conversation
 - Messages work via HTTP polling fallback when socket is disconnected
 - All changes pass lint cleanly
+
+---
+Task ID: 4
+Agent: Main Agent
+Task: Fix profile section: avatar positioning, z-index stacking, duplicate role display, and add profile navigation to settings
+
+Work Log:
+- **A) Avatar positioning**: Confirmed avatar already uses `-bottom-16` (was previously `-bottom-20`, already fixed). Added `z-10` to the avatar container div for proper stacking context.
+- **B) Z-index stacking**: Added `z-20` to the status indicator dot on the avatar to ensure it renders above other avatar elements (zoom overlay, ring effects).
+- **C) Duplicate role display**: Removed the `titleLabel` span that appeared before the user's name in the profile info section. For teachers, both `titleLabel` (e.g., "دكتور") and `roleLabel` Badge (e.g., "دكتور") showed the same academic title, creating a duplicate. The role now appears only ONCE as a Badge. Cleaned up unused `titleLabel` variable and `getTitleLabel` import.
+- **D) "الصفحة الشخصية" navigation**: Added a "الصفحة الشخصية" (My Profile Page) button in the settings section header. Uses `useAppStore`'s `openProfile` function with `profile.id` to navigate to the user's profile page. Imported `useAppStore` from `@/stores/app-store`. Button is styled as an outline button with User icon, positioned at the top-right of the settings header.
+
+Files modified:
+- `/home/z/my-project/src/components/shared/user-profile-page.tsx`: Avatar z-index, status dot z-index, removed duplicate titleLabel
+- `/home/z/my-project/src/components/shared/settings-section.tsx`: Added useAppStore import, openProfile destructuring, and profile navigation button
+
+Stage Summary:
+- Avatar container has `z-10` for proper stacking, status dot has `z-20`
+- Duplicate role display removed — role appears only once as a Badge
+- Settings page now has "الصفحة الشخصية" button that navigates to user's profile
+- No new lint errors introduced
+Task ID: 9
+Agent: Main Agent
+Task: Settings section fixes — Hide delete account for admin/superadmin, Add developer info section
+
+Work Log:
+- Read worklog and current settings-section.tsx to understand the file structure
+- Identified the Danger Zone Card section (lines 1036-1121) containing the delete account functionality
+- **Change A**: Wrapped the entire Danger Zone Card with conditional `{profile.role !== 'admin' && profile.role !== 'superadmin' && ( ... )}` so admin/superadmin users cannot see or access the delete account button
+- **Change B**: Added new "عن التطبيق" (About the App) card before the Danger Zone section with:
+  - Developer name: محمود رمضان
+  - Organization: تكنولوجيا التعليم الرقمي
+  - Subtle note describing Attendu as an educational platform for managing attendance and lectures
+  - No mention of z.ai or any AI tool
+  - Uses `Info` icon from lucide-react for the card header
+  - Styled consistently with other settings cards (same border, bg-card, shadow-sm, bg-muted/30 header pattern)
+- Added `Info` import to lucide-react imports
+- Updated Danger Zone animation custom index from 3 to 4 (About card now uses custom={3})
+- Verified lint passes with no errors in settings-section.tsx
+- Dev server compiles successfully
+
+Stage Summary:
+- Admin and superadmin users no longer see the "منطقة الخطر" (Danger Zone) section with the delete account button
+- New "عن التطبيق" card shows developer info (محمود رمضان / تكنولوجيا التعليم الرقمي) for all users
+- Both changes use consistent styling with existing settings cards
+- No z.ai or AI tool references anywhere
+
+---
+Task ID: 7
+Agent: Main Agent
+Task: Notifications Deep Linking Enhancement
+
+Work Log:
+- Reviewed the existing `handleNotificationClick` in `notifications-section.tsx`
+- **Assignment notifications**: Previously navigated to the general `assignments` section. Enhanced to extract `subjectId` from `assignment:SUBJECT_ID` link format, then calls `setSelectedSubjectId(subjectId)` and `setCourseTab('assignments')` to navigate to the specific subject's assignments tab on the course page (not the general assignments section). Falls back to the general assignments section if no subject ID is present.
+- **Grade notifications**: No handler existed before. Added new handler that catches both `notif.type === 'grade'` and `notif.link?.startsWith('grade:')` patterns. Extracts subject ID from `grade:SUBJECT_ID` link format and navigates to the course page with assignments tab active, same as assignment notifications.
+- **Enrollment notifications**: Already correctly navigates to the course page with `setSelectedSubjectId` and `setCurrentPage`. Verified — no changes needed.
+- **File request notifications**: Previously just called `openProfile(user.id)` which opened the profile page but didn't set the active tab. Updated to call `openProfile(user.id, 'requests')` which passes the `'requests'` tab to the profile page. Also updated the legacy `file` type with `link === 'settings'` to do the same.
+- **App store changes** (`app-store.ts`): Added `profileTab: string` and `setProfileTab` to the app state. Updated `openProfile` to accept an optional `tab` parameter. Added `profileTab` to the `partialize` config for persistence.
+- **Profile page changes** (`user-profile-page.tsx`): Changed `<Tabs defaultValue="files">` to `<Tabs value={profileTab} onValueChange={setProfileTab}>` to make the Tabs component controlled by the app store's `profileTab` state. Destructured `profileTab` and `setProfileTab` from `useAppStore`.
+
+Files modified:
+- `/home/z/my-project/src/stores/app-store.ts`: Added profileTab state, updated openProfile signature
+- `/home/z/my-project/src/components/shared/notifications-section.tsx`: Enhanced assignment, grade, and file_request deep linking
+- `/home/z/my-project/src/components/shared/user-profile-page.tsx`: Made Tabs controlled via app store profileTab
+
+Stage Summary:
+- Assignment notifications now navigate to the specific subject's assignments tab on the course page
+- Grade notifications now navigate to the specific subject's assignments tab on the course page
+- Enrollment notifications remain correctly handled
+- File request notifications now open the profile page with the "requests" tab active
+- Profile page tab state is now managed by the app store for deep linking support
+
+---
+Task ID: 8
+Agent: Main Agent
+Task: My Files - Fix upload button end-to-end
+
+Work Log:
+- Traced the full upload flow in `personal-files-section.tsx`:
+  1. Upload button → `openUploadModal()` → sets `uploadModalOpen = true` ✓
+  2. Modal opens with hidden file input + "اضغط لاختيار ملفات" button that triggers `fileInputRef.current?.click()` ✓
+  3. `handleFileSelect()` creates `PendingUpload` entries from selected files ✓
+  4. "رفع الكل" button calls `handleUploadAll()` which uses XHR to POST to `/api/files/upload` ✓
+  5. After upload, `fetchFiles()` refreshes the file list ✓
+  6. API endpoint at `/api/files/upload/route.ts` validates file type/size, uploads to Supabase Storage, inserts DB record ✓
+- **Fixed `handleUploadAll`** toast message: Previously showed unconditional `toast.success('تم رفع الملفات بنجاح')` even when some files failed. Now tracks `successCount` and `failCount`, and shows appropriate toast: all success, partial success with failure count, or all failed.
+- **Added auto-close after successful upload**: Modal now auto-closes 800ms after all uploads succeed (so user can see the 100% progress), but stays open if any files failed so user can retry.
+- **Verified API endpoint**: The `/api/files/upload` endpoint correctly validates file types, size (50MB max), uploads to Supabase Storage, and inserts a user_files record with the display name. The `course-upload` endpoint also works for assigning files to subjects.
+- Pre-existing syntax error fixed: `chat-section.tsx` had AlertDialog components outside the parent motion.div without a React fragment wrapper, causing compilation failure. Added `<>` fragment wrapper.
+
+Files modified:
+- `/home/z/my-project/src/components/shared/personal-files-section.tsx`: Improved handleUploadAll with success/failure tracking and auto-close
+- `/home/z/my-project/src/components/shared/chat-section.tsx`: Fixed JSX syntax error (missing fragment wrapper)
+
+Stage Summary:
+- Upload button correctly opens modal, file input works, upload API works, file list refreshes after upload
+- Upload now shows accurate success/failure toast messages instead of always showing success
+- Modal auto-closes after successful upload, stays open on failure for retry
+- Fixed pre-existing chat-section.tsx compilation error

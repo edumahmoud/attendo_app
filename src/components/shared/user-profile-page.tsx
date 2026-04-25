@@ -40,7 +40,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import UserAvatar, { getRoleLabel, getTitleLabel } from '@/components/shared/user-avatar';
+import UserAvatar, { getRoleLabel } from '@/components/shared/user-avatar';
 import UserLink from '@/components/shared/user-link';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppStore } from '@/stores/app-store';
@@ -229,7 +229,7 @@ export default function UserProfilePage({ userId, currentUser, onBack }: UserPro
   const [profileUserStatus, setProfileUserStatus] = useState<UserStatus>('offline');
   const { socket, isConnected } = useSharedSocket();
 
-  const { openProfile } = useAppStore();
+  const { openProfile, profileTab, setProfileTab } = useAppStore();
 
   // ─── Auth headers ─────────────────────────────────────
   const getAuthHeaders = async () => {
@@ -396,7 +396,6 @@ export default function UserProfilePage({ userId, currentUser, onBack }: UserPro
 
   // ─── Role & title labels ──────────────────────────────
   const roleLabel = profile ? getRoleLabel(profile.role, profile.gender, profile.title_id) : '';
-  const titleLabel = profile?.role === 'teacher' ? getTitleLabel(profile.title_id, profile.gender) : null;
 
   // ─── Loading state ────────────────────────────────────
   if (loading) {
@@ -458,7 +457,7 @@ export default function UserProfilePage({ userId, currentUser, onBack }: UserPro
         </div>
 
         {/* Avatar - overlapping the banner */}
-        <div className="absolute -bottom-20 right-6 sm:right-10">
+        <div className="absolute -bottom-16 right-6 sm:right-10 z-10">
           <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -481,7 +480,7 @@ export default function UserProfilePage({ userId, currentUser, onBack }: UserPro
               </div>
             )}
             {/* Status indicator */}
-            <span className={`absolute bottom-2 left-2 h-5 w-5 rounded-full ring-3 ring-white dark:ring-gray-900 ${
+            <span className={`absolute bottom-2 left-2 h-5 w-5 rounded-full ring-3 ring-white dark:ring-gray-900 z-20 ${
               getStatusColor(profileUserStatus)
             } ${profileUserStatus === 'online' ? 'animate-pulse' : ''}`} />
           </motion.div>
@@ -498,13 +497,8 @@ export default function UserProfilePage({ userId, currentUser, onBack }: UserPro
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
           {/* Name & identity */}
           <div className="flex-1 min-w-0">
-            {/* Name with title */}
+            {/* Name */}
             <div className="flex flex-wrap items-center gap-2 mb-1">
-              {titleLabel && (
-                <span className="text-emerald-600 dark:text-emerald-400 text-sm font-semibold bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-md">
-                  {titleLabel}
-                </span>
-              )}
               <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
                 {profile.name}
               </h1>
@@ -564,7 +558,7 @@ export default function UserProfilePage({ userId, currentUser, onBack }: UserPro
         transition={{ duration: 0.4, delay: 0.4 }}
         className="px-6 sm:px-10 mt-5"
       >
-        <Tabs defaultValue="files" dir="rtl" className="w-full">
+        <Tabs value={profileTab} onValueChange={setProfileTab} dir="rtl" className="w-full">
           <TabsList className="mb-5 bg-muted/60">
             <TabsTrigger value="files" className="gap-1.5 text-xs sm:text-sm">
               <FolderOpen className="h-4 w-4" />

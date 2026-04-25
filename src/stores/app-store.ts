@@ -10,7 +10,9 @@ interface AppState {
   // Profile page navigation
   profileUserId: string | null;
   setProfileUserId: (id: string | null) => void;
-  openProfile: (userId: string) => void;
+  openProfile: (userId: string, tab?: string) => void;
+  profileTab: string;
+  setProfileTab: (tab: string) => void;
   
   // Student navigation
   studentSection: StudentSection;
@@ -54,6 +56,7 @@ interface AppState {
 const initialState = {
   currentPage: 'auth' as AppPage,
   profileUserId: null as string | null,
+  profileTab: 'files' as string,
   studentSection: 'dashboard' as StudentSection,
   teacherSection: 'dashboard' as TeacherSection,
   viewingQuizId: null as string | null,
@@ -73,7 +76,8 @@ export const useAppStore = create<AppState>()(
       
       setCurrentPage: (page) => set({ currentPage: page }),
       setProfileUserId: (id) => set({ profileUserId: id }),
-      openProfile: (userId) => set({ profileUserId: userId, currentPage: 'profile' }),
+      openProfile: (userId, tab) => set({ profileUserId: userId, currentPage: 'profile', ...(tab ? { profileTab: tab } : {}) }),
+      setProfileTab: (tab) => set({ profileTab: tab }),
       setStudentSection: (section) => set({ studentSection: section }),
       setTeacherSection: (section) => set({ teacherSection: section }),
       setViewingQuizId: (id) => set({ viewingQuizId: id, currentPage: id ? 'quiz' : 'student-dashboard' }),
@@ -95,6 +99,7 @@ export const useAppStore = create<AppState>()(
         currentPage: state.currentPage,
         selectedSubjectId: state.selectedSubjectId,
         courseTab: state.courseTab,
+        profileTab: state.profileTab,
       }),
     }
   )

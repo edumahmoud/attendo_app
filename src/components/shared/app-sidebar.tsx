@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   LayoutDashboard,
@@ -26,6 +26,29 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useAppStore } from '@/stores/app-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { useSocketEvent } from '@/lib/socket';
+import UserAvatar, { formatNameWithTitle } from '@/components/shared/user-avatar';
+
+// -------------------------------------------------------
+// Status dot configuration
+// Maps user-selected status to dot color + animation
+// -------------------------------------------------------
+const STATUS_DOT_CONFIG: Record<string, { color: string; pulse: boolean }> = {
+  online: { color: 'bg-emerald-500', pulse: true },
+  busy: { color: 'bg-amber-500', pulse: false },
+  away: { color: 'bg-orange-500', pulse: false },
+  invisible: { color: 'bg-gray-400', pulse: false },
+  offline: { color: 'bg-gray-400', pulse: false },
+};
+
+const STATUS_STORAGE_KEY = 'attenddo-user-status';
+
+/** Read the current user status from localStorage (client-side only) */
+function getStoredStatus(): string {
+  if (typeof window === 'undefined') return 'online';
+  const saved = localStorage.getItem(STATUS_STORAGE_KEY);
+  if (saved && STATUS_DOT_CONFIG[saved]) return saved;
+  return 'online';
+}
 
 // -------------------------------------------------------
 // Types
@@ -68,6 +91,80 @@ const teacherNavItems: NavItem[] = [
   { id: 'notifications', label: 'الإشعارات', icon: <Bell className="h-5 w-5" /> },
   { id: 'settings', label: 'الإعدادات', icon: <Settings className="h-5 w-5" /> },
 ];
+
+// -------------------------------------------------------
+// User status section (avatar + status dot at top of sidebar)
+// -------------------------------------------------------
+function UserStatusSection({ collapsed }: { collapsed: boolean }) {
+  const user = useAuthStore((s) => s.user);
+  const [userStatus, setUserStatus] = useState<string>(getStoredStatus);
+
+  // Listen for status changes via socket (e.g. from settings-section)
+  useSocketEvent<{ userId: string; status: string }>('user-status-changed', (data) => {
+    if (user && data.userId === user.id) {
+      setUserStatus(data.status);
+    }
+  });
+
+  // Also poll localStorage on window focus in case it was changed in another tab
+  useEffect(() => {
+    const handleFocus = () => {
+      setUserStatus(getStoredStatus());
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, []);
+
+  // Also listen for storage events (cross-tab sync)
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === STATUS_STORAGE_KEY && e.newValue && STATUS_DOT_CONFIG[e.newValue]) {
+        setUserStatus(e.newValue);
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
+  if (!user) return null;
+
+  const dotConfig = STATUS_DOT_CONFIG[userStatus] || STATUS_DOT_CONFIG.online;
+  const displayName = formatNameWithTitle(user.name, user.role, user.title_id, user.gender);
+
+  if (collapsed) {
+    return (
+      <div className="flex justify-center px-2 py-2 border-b mb-2">
+        <div className="relative">
+          <UserAvatar name={user.name} avatarUrl={user.avatar_url} size="sm" />
+          <span
+            className={`absolute -bottom-0.5 -left-0.5 h-3 w-3 rounded-full border-2 border-background z-10 ${dotConfig.color} ${dotConfig.pulse ? 'animate-pulse' : ''}`}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-3 px-4 py-3 border-b mb-2">
+      <div className="relative shrink-0">
+        <UserAvatar name={user.name} avatarUrl={user.avatar_url} size="sm" />
+        <span
+          className={`absolute -bottom-0.5 -left-0.5 h-3 w-3 rounded-full border-2 border-background z-10 ${dotConfig.color} ${dotConfig.pulse ? 'animate-pulse' : ''}`}
+        />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-foreground truncate">{displayName}</p>
+        <p className="text-[10px] text-muted-foreground">
+          {userStatus === 'online' ? 'متصل' :
+           userStatus === 'busy' ? 'مشغول' :
+           userStatus === 'away' ? 'بعيد' :
+           userStatus === 'invisible' ? 'غير مرئي' :
+           'غير متصل'}
+        </p>
+      </div>
+    </div>
+  );
+}
 
 // -------------------------------------------------------
 // Navigation items content (shared between collapsed/expanded/mobile)
@@ -211,6 +308,7 @@ export default function AppSidebar({
             <SheetTitle>القائمة الرئيسية</SheetTitle>
           </SheetHeader>
           <div className="flex h-full flex-col overflow-hidden pt-2" dir="rtl">
+            <UserStatusSection collapsed={false} />
             <ScrollArea className="flex-1 min-h-0">
               <nav className="px-3 py-4">
                 <NavItems
@@ -236,6 +334,9 @@ export default function AppSidebar({
       }`}
     >
       <div className="flex h-full flex-col overflow-hidden" dir="rtl">
+        {/* User info with status dot */}
+        <UserStatusSection collapsed={collapsed} />
+
         {/* Navigation */}
         <ScrollArea className="flex-1 min-h-0">
           <nav className="px-2 sm:px-3 py-3 sm:py-4">

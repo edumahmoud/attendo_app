@@ -21,6 +21,7 @@ import {
   Download,
   WifiOff,
   Check,
+  Info,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -45,6 +46,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/auth-store';
+import { useAppStore } from '@/stores/app-store';
 import { useSharedSocket, useSocketEvent, setSocketAuth } from '@/lib/socket';
 import type { UserProfile, UserStatus } from '@/lib/types';
 
@@ -154,6 +156,7 @@ export default function SettingsSection({
   onDeleteAccount,
 }: SettingsSectionProps) {
   const { refreshProfile } = useAuthStore();
+  const { openProfile } = useAppStore();
 
   // ─── Shared socket ───
   const { isConnected, emitStatusChange } = useSharedSocket();
@@ -556,9 +559,20 @@ export default function SettingsSection({
       className="space-y-4"
     >
       {/* Header */}
-      <div>
-        <h2 className="text-xl sm:text-2xl font-bold text-foreground">الإعدادات</h2>
-        <p className="text-sm text-muted-foreground mt-0.5">إدارة الملف الشخصي وإعدادات الحساب</p>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl sm:text-2xl font-bold text-foreground">الإعدادات</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">إدارة الملف الشخصي وإعدادات الحساب</p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 h-8 text-xs shrink-0"
+          onClick={() => openProfile(profile.id)}
+        >
+          <User className="h-3.5 w-3.5" />
+          الصفحة الشخصية
+        </Button>
       </div>
 
       {/* Migration warning banner */}
@@ -1033,13 +1047,46 @@ export default function SettingsSection({
             </div>
           </motion.div>
 
-          {/* Danger Zone Card */}
+          {/* About the App Card */}
+          <motion.div
+            className="rounded-xl border bg-card shadow-sm overflow-hidden"
+            variants={sectionVariants}
+            initial="hidden"
+            animate="visible"
+            custom={3}
+          >
+            <div className="flex items-center gap-2 border-b px-4 py-2.5 bg-muted/30">
+              <Info className="h-4 w-4 text-emerald-600" />
+              <h3 className="font-semibold text-foreground text-sm">عن التطبيق</h3>
+            </div>
+
+            <div className="p-4 space-y-3">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">المطور:</span>
+                  <span className="text-sm font-semibold text-foreground">محمود رمضان</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">الجهة:</span>
+                  <span className="text-sm text-foreground">تكنولوجيا التعليم الرقمي</span>
+                </div>
+              </div>
+              <div className="rounded-lg border bg-muted/30 p-2.5">
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  أتيندو منصة تعليمية رقمية تهدف إلى تسهيل إدارة الحضور والمحاضرات وتعزيز التواصل بين المعلمين والطلاب.
+                </p>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Danger Zone Card - Hidden for admin/superadmin */}
+          {profile.role !== 'admin' && profile.role !== 'superadmin' && (
           <motion.div
             className="rounded-xl border border-rose-200 bg-rose-50/30 shadow-sm overflow-hidden"
             variants={sectionVariants}
             initial="hidden"
             animate="visible"
-            custom={3}
+            custom={4}
           >
             <div className="flex items-center gap-2 border-b border-rose-200 px-4 py-2.5 bg-rose-50/50">
               <Shield className="h-4 w-4 text-rose-500" />
@@ -1119,6 +1166,7 @@ export default function SettingsSection({
               </AlertDialog>
             </div>
           </motion.div>
+          )}
         </div>
       </div>
 

@@ -528,6 +528,9 @@ export default function PersonalFilesSection({ profile, role }: PersonalFilesSec
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token || '';
 
+    let successCount = 0;
+    let failCount = 0;
+
     for (const item of toUpload) {
       // Mark as uploading
       setPendingUploads((prev) =>
@@ -582,6 +585,8 @@ export default function PersonalFilesSection({ profile, role }: PersonalFilesSec
           xhr.send(formData);
         });
 
+        successCount++;
+
         // If subjects are selected, also assign to courses
         if (selectedSubjectForUploadIds.size > 0) {
           const theFile = item.file;
@@ -614,14 +619,31 @@ export default function PersonalFilesSection({ profile, role }: PersonalFilesSec
           }
         }
       } catch {
+        failCount++;
         setPendingUploads((prev) =>
           prev.map((p) => (p.id === item.id ? { ...p, progress: -1, uploading: false } : p))
         );
       }
     }
 
-    toast.success('تم رفع الملفات بنجاح');
+    // Show appropriate toast based on results
+    if (successCount > 0 && failCount === 0) {
+      toast.success(`تم رفع ${successCount} ملف بنجاح`);
+    } else if (successCount > 0 && failCount > 0) {
+      toast.success(`تم رفع ${successCount} ملف بنجاح (${failCount} فشل)`);
+    } else if (failCount > 0) {
+      toast.error(`فشل رفع ${failCount} ملف`);
+    }
+
+    // Refresh file list and close modal if all succeeded
     fetchFiles();
+    if (failCount === 0 && successCount > 0) {
+      // Auto-close modal after a short delay so user can see completion
+      setTimeout(() => {
+        setUploadModalOpen(false);
+        setPendingUploads([]);
+      }, 800);
+    }
   };
 
   // -------------------------------------------------------
