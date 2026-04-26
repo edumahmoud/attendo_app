@@ -289,16 +289,16 @@ export default function AdminDashboard({ profile, onSignOut }: AdminDashboardPro
   // -------------------------------------------------------
   const [changingRole, setChangingRole] = useState(false);
 
-  const fetchAllData = useCallback(async () => {
-    setLoadingData(true);
+  const fetchAllData = useCallback(async (silent = false) => {
+    if (!silent) setLoadingData(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token || '';
       
       if (!token) {
         console.error('Admin data fetch: No auth token available');
-        toast.error('لا يوجد جلسة نشطة. يرجى تسجيل الدخول مرة أخرى');
-        setLoadingData(false);
+        if (!silent) toast.error('لا يوجد جلسة نشطة. يرجى تسجيل الدخول مرة أخرى');
+        if (!silent) setLoadingData(false);
         return;
       }
       
@@ -309,14 +309,16 @@ export default function AdminDashboard({ profile, onSignOut }: AdminDashboardPro
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
         console.error('Admin data fetch failed:', res.status, errorData);
-        if (res.status === 401) {
-          toast.error('انتهت صلاحية الجلسة. يرجى تحديث الصفحة أو تسجيل الدخول مرة أخرى');
-        } else if (res.status === 403) {
-          toast.error('غير مصرح بالوصول. يجب أن تكون مشرف أو مدير منصة');
-        } else {
-          toast.error(`خطأ في جلب البيانات: ${errorData.error || res.status}`);
+        if (!silent) {
+          if (res.status === 401) {
+            toast.error('انتهت صلاحية الجلسة. يرجى تحديث الصفحة أو تسجيل الدخول مرة أخرى');
+          } else if (res.status === 403) {
+            toast.error('غير مصرح بالوصول. يجب أن تكون مشرف أو مدير منصة');
+          } else {
+            toast.error(`خطأ في جلب البيانات: ${errorData.error || res.status}`);
+          }
         }
-        setLoadingData(false);
+        if (!silent) setLoadingData(false);
         return;
       }
       
@@ -333,13 +335,13 @@ export default function AdminDashboard({ profile, onSignOut }: AdminDashboardPro
         }
       } else if (!result.success) {
         console.error('Admin data fetch returned error:', result.error);
-        toast.error(result.error || 'حدث خطأ أثناء جلب البيانات');
+        if (!silent) toast.error(result.error || 'حدث خطأ أثناء جلب البيانات');
       }
     } catch (error) {
       console.error('Error fetching admin data:', error);
-      toast.error('حدث خطأ غير متوقع أثناء جلب البيانات');
+      if (!silent) toast.error('حدث خطأ غير متوقع أثناء جلب البيانات');
     } finally {
-      setLoadingData(false);
+      if (!silent) setLoadingData(false);
     }
   }, []);
 
@@ -356,7 +358,7 @@ export default function AdminDashboard({ profile, onSignOut }: AdminDashboardPro
       const result = await res.json();
       if (result.success) {
         toast.success('تم تغيير الدور بنجاح');
-        fetchAllData();
+        fetchAllData(true);
         setUserDetailOpen(false);
       } else {
         toast.error(result.error || 'حدث خطأ أثناء تغيير الدور');
@@ -474,7 +476,7 @@ export default function AdminDashboard({ profile, onSignOut }: AdminDashboardPro
         toast.success('تم حذف المستخدم بنجاح');
         setUserDetailOpen(false);
         setConfirmDeleteUser(null);
-        fetchAllData();
+        fetchAllData(true);
       } else {
         toast.error(result.error || 'حدث خطأ أثناء حذف المستخدم');
       }
@@ -503,7 +505,7 @@ export default function AdminDashboard({ profile, onSignOut }: AdminDashboardPro
         toast.success('تم حذف المقرر بنجاح');
         setSubjectDetailOpen(false);
         setConfirmDeleteSubject(null);
-        fetchAllData();
+        fetchAllData(true);
       } else {
         toast.error(result.error || 'حدث خطأ أثناء حذف المقرر');
       }
@@ -609,7 +611,7 @@ export default function AdminDashboard({ profile, onSignOut }: AdminDashboardPro
         setBanCustomDate('');
         setUserDetailOpen(false);
         fetchBannedUsers();
-        fetchAllData();
+        fetchAllData(true);
       } else {
         toast.error(result.error || 'حدث خطأ أثناء حظر المستخدم');
       }

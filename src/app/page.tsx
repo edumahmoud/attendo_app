@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { GraduationCap, Loader2, BookOpen, BrainCircuit, Users, Shield } from 'lucide-react';
+import { GraduationCap, Loader2, BookOpen, BrainCircuit, Users, Shield, LayoutDashboard, Settings, Megaphone, Ban, TrendingUp, MessageCircle, Building2, FileText, FolderOpen, FileSpreadsheet, Bell } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppStore } from '@/stores/app-store';
 import type { StudentSection, TeacherSection, AdminSection } from '@/lib/types';
@@ -18,22 +18,62 @@ import QuizView from '@/components/shared/quiz-view';
 import SummaryView from '@/components/shared/summary-view';
 import UserProfilePage from '@/components/shared/user-profile-page';
 import AppHeader from '@/components/shared/app-header';
+import AppSidebar from '@/components/shared/app-sidebar';
 import SetupWizard from '@/components/setup/setup-wizard';
 import BannedUserOverlay from '@/components/shared/banned-user-overlay';
 
 type AuthMode = 'login' | 'register' | 'forgot-password';
 
+// Admin navigation items (shared between admin-dashboard and profile page sidebar)
+const adminNavItems = [
+  { id: 'dashboard', label: 'لوحة التحكم', icon: <LayoutDashboard className="h-5 w-5" /> },
+  { id: 'users', label: 'المستخدمون', icon: <Users className="h-5 w-5" /> },
+  { id: 'subjects', label: 'المقررات', icon: <BookOpen className="h-5 w-5" /> },
+  { id: 'announcements', label: 'الإعلانات', icon: <Megaphone className="h-5 w-5" /> },
+  { id: 'banned', label: 'المحظورون', icon: <Ban className="h-5 w-5" /> },
+  { id: 'reports', label: 'التقارير', icon: <TrendingUp className="h-5 w-5" /> },
+  { id: 'chat', label: 'المحادثات', icon: <MessageCircle className="h-5 w-5" /> },
+  { id: 'settings', label: 'الإعدادات', icon: <Settings className="h-5 w-5" /> },
+  { id: 'institution', label: 'المؤسسة', icon: <Building2 className="h-5 w-5" /> },
+];
+
+// Teacher navigation items (for profile page sidebar)
+const teacherNavItems = [
+  { id: 'dashboard', label: 'لوحة التحكم', icon: <LayoutDashboard className="h-5 w-5" /> },
+  { id: 'subjects', label: 'المقررات', icon: <BookOpen className="h-5 w-5" /> },
+  { id: 'chat', label: 'المحادثات', icon: <MessageCircle className="h-5 w-5" /> },
+  { id: 'students', label: 'الطلاب', icon: <Users className="h-5 w-5" /> },
+  { id: 'files', label: 'ملفاتي', icon: <FolderOpen className="h-5 w-5" /> },
+  { id: 'analytics', label: 'التقارير', icon: <TrendingUp className="h-5 w-5" /> },
+  { id: 'notifications', label: 'الإشعارات', icon: <Bell className="h-5 w-5" /> },
+  { id: 'settings', label: 'الإعدادات', icon: <Settings className="h-5 w-5" /> },
+];
+
+// Student navigation items (for profile page sidebar)
+const studentNavItems = [
+  { id: 'dashboard', label: 'لوحة التحكم', icon: <LayoutDashboard className="h-5 w-5" /> },
+  { id: 'subjects', label: 'المقررات', icon: <BookOpen className="h-5 w-5" /> },
+  { id: 'chat', label: 'المحادثات', icon: <MessageCircle className="h-5 w-5" /> },
+  { id: 'teachers', label: 'المعلمون', icon: <Users className="h-5 w-5" /> },
+  { id: 'summaries', label: 'الملخصات', icon: <FileText className="h-5 w-5" /> },
+  { id: 'assignments', label: 'المهام', icon: <FileSpreadsheet className="h-5 w-5" /> },
+  { id: 'files', label: 'ملفاتي', icon: <FolderOpen className="h-5 w-5" /> },
+  { id: 'notifications', label: 'الإشعارات', icon: <Bell className="h-5 w-5" /> },
+  { id: 'settings', label: 'الإعدادات', icon: <Settings className="h-5 w-5" /> },
+];
+
 function HomeContent() {
   const { user, loading, initialized, initialize, signOut, sessionKickedMessage, banInfo } = useAuthStore();
-  const { currentPage, viewingQuizId, viewingSummaryId, profileUserId, setCurrentPage, reset: resetAppStore, sidebarOpen, setSidebarOpen, setStudentSection, setTeacherSection, setAdminSection } = useAppStore();
+  const { currentPage, viewingQuizId, viewingSummaryId, profileUserId, setCurrentPage, reset: resetAppStore, sidebarOpen, setSidebarOpen, setStudentSection, setTeacherSection, setAdminSection, studentSection: storedStudentSection, teacherSection: storedTeacherSection, adminSection: storedAdminSection } = useAppStore();
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const searchParams = useSearchParams();
 
-  // ─── Close sidebar when navigating to profile/quiz/summary views ───
+  // ─── Close sidebar when navigating to quiz/summary views ───
   // These views don't include the sidebar component, so we need to ensure
   // the mobile Sheet (portal) is closed and desktop sidebar state is reset
+  // NOTE: Profile page DOES include AppSidebar, so we don't force-close it there
   useEffect(() => {
-    if (currentPage === 'profile' || currentPage === 'quiz' || currentPage === 'summary') {
+    if (currentPage === 'quiz' || currentPage === 'summary') {
       if (sidebarOpen) {
         setSidebarOpen(false);
       }
@@ -297,10 +337,38 @@ function HomeContent() {
     );
   }
 
-  // Profile view
-  // NOTE: Profile page renders WITHOUT sidebar to prevent z-index conflicts.
-  // The sidebar is force-closed via openProfile() in app-store.
+  // Profile view — includes AppSidebar so the toggle button works
   if (currentPage === 'profile' && profileUserId) {
+    const profileNavItems = (() => {
+      if (user.role === 'superadmin' || user.role === 'admin') {
+        return adminNavItems;
+      } else if (user.role === 'teacher') {
+        return teacherNavItems;
+      } else {
+        return studentNavItems;
+      }
+    })();
+
+    const profileActiveSection = (() => {
+      if (user.role === 'superadmin' || user.role === 'admin') return storedAdminSection || 'dashboard';
+      if (user.role === 'teacher') return storedTeacherSection || 'dashboard';
+      return storedStudentSection || 'dashboard';
+    })();
+
+    const profileSectionChangeHandler = (section: string) => {
+      if (user.role === 'superadmin' || user.role === 'admin') {
+        setAdminSection(section as AdminSection);
+      } else if (user.role === 'teacher') {
+        setTeacherSection(section as TeacherSection);
+      } else {
+        setStudentSection(section as StudentSection);
+      }
+      setCurrentPage(
+        user.role === 'superadmin' || user.role === 'admin' ? 'admin-dashboard' :
+        user.role === 'teacher' ? 'teacher-dashboard' : 'student-dashboard'
+      );
+    };
+
     return (
       <SocketProvider>
         <div className="min-h-screen bg-background" dir="rtl">
@@ -318,7 +386,6 @@ function HomeContent() {
               signOut();
             }}
             onOpenSettings={() => {
-              // Set the section to 'settings' in the appropriate store before navigating
               if (user.role === 'superadmin' || user.role === 'admin') {
                 setAdminSection('settings' as AdminSection);
                 setCurrentPage('admin-dashboard');
@@ -333,7 +400,13 @@ function HomeContent() {
             onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
             sidebarCollapsed={!sidebarOpen}
           />
-          <main className="pt-14 sm:pt-16 bg-background min-h-screen">
+          <AppSidebar
+            role={user.role as 'student' | 'teacher' | 'admin' | 'superadmin'}
+            activeSection={profileActiveSection}
+            onSectionChange={profileSectionChangeHandler}
+            customNavItems={profileNavItems}
+          />
+          <main className={`pt-14 sm:pt-16 bg-background min-h-screen transition-all duration-300 ${sidebarOpen ? 'md:mr-64' : 'md:mr-[68px]'}`}>
             <UserProfilePage
               userId={profileUserId}
               currentUser={user}
