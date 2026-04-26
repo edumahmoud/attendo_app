@@ -75,7 +75,7 @@ export const useAppStore = create<AppState>()(
       
       setCurrentPage: (page) => set({ currentPage: page }),
       setProfileUserId: (id) => set({ profileUserId: id }),
-      openProfile: (userId) => set({ profileUserId: userId, currentPage: 'profile' }),
+      openProfile: (userId) => set({ profileUserId: userId, currentPage: 'profile', sidebarOpen: false }),
       setStudentSection: (section) => set({ studentSection: section }),
       setTeacherSection: (section) => set({ teacherSection: section }),
       setAdminSection: (section) => set({ adminSection: section }),

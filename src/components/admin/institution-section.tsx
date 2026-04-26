@@ -134,18 +134,17 @@ export default function InstitutionSection({ profile }: InstitutionSectionProps)
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('userId', profile.id);
 
-      const res = await fetch('/api/avatar', {
+      // Use the dedicated institution-logo endpoint instead of /api/avatar
+      // This avoids overwriting the user's avatar_url in the database
+      const res = await fetch('/api/institution-logo', {
         method: 'POST',
         body: formData,
       });
 
       const data = await res.json();
-      // The avatar API returns { success: true, data: { avatar_url } } or { error }
-      const logoUrl = data.data?.avatar_url || data.url;
-      if ((data.success || data.url) && logoUrl) {
-        updateField('logo_url', logoUrl);
+      if (data.success && data.url) {
+        updateField('logo_url', data.url);
         toast.success('تم رفع الشعار بنجاح');
       } else {
         toast.error(data.error || 'حدث خطأ أثناء رفع الشعار');

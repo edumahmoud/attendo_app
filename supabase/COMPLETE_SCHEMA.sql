@@ -619,9 +619,11 @@ CREATE POLICY "Anyone authenticated can find teachers" ON public.users
 -- Admin can read all users
 CREATE POLICY "Admins can read all users" ON public.users
   FOR SELECT USING (
-    role IN ('admin', 'superadmin') AND auth.uid() = id
-    OR id IN (SELECT u.id FROM public.users u WHERE u.role IN ('admin', 'superadmin') AND u.id = auth.uid())
+    EXISTS (SELECT 1 FROM public.users u WHERE u.id = auth.uid() AND u.role IN ('admin', 'superadmin'))
   );
+-- Any authenticated user can read basic profile info of other users
+CREATE POLICY "Authenticated users can read profiles" ON public.users
+  FOR SELECT USING (auth.uid() IS NOT NULL);
 
 -- ===== TEACHER-STUDENT LINKS =====
 CREATE POLICY "Teachers can see own student links" ON public.teacher_student_links
@@ -1345,6 +1347,13 @@ CREATE POLICY "Authenticated users can read course files" ON storage.objects
   FOR SELECT USING (
     bucket_id = 'user-files' AND 
     (storage.foldername(name))[1] IN ('courses', 'subjects')
+  );
+
+-- Anyone can read institution logos (needed for login/auth pages)
+CREATE POLICY "Anyone can read institution logos" ON storage.objects
+  FOR SELECT USING (
+    bucket_id = 'user-files' AND
+    (storage.foldername(name))[1] = 'institution'
   );
 
 CREATE POLICY "Users can update own files" ON storage.objects

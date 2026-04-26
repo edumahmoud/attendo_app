@@ -290,7 +290,7 @@ function HomeContent() {
   if (currentPage === 'profile' && profileUserId) {
     return (
       <SocketProvider>
-        <div className="relative z-20 min-h-screen bg-background" dir="rtl">
+        <div className="relative min-h-screen bg-background" dir="rtl">
           <AppHeader
             userName={user.name}
             userId={user.id}
@@ -320,7 +320,7 @@ function HomeContent() {
             onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
             sidebarCollapsed={!sidebarOpen}
           />
-          <main className="relative z-10 pt-14 sm:pt-16 bg-background min-h-screen">
+          <main className="pt-14 sm:pt-16 bg-background min-h-screen">
             <UserProfilePage
               userId={profileUserId}
               currentUser={user}
