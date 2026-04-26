@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Mail, Lock, Eye, EyeOff, Loader2, GraduationCap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppStore } from '@/stores/app-store';
+import { useInstitutionStore } from '@/stores/institution-store';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { toast } from 'sonner';
 
@@ -26,6 +27,15 @@ export default function LoginForm({ onSwitchToRegister, onForgotPassword }: Logi
 
   const { signInWithEmail, signInWithGoogle } = useAuthStore();
   const { setCurrentPage } = useAppStore();
+  const { institution, fetchInstitution, loaded } = useInstitutionStore();
+
+  // Fetch institution data on mount
+  useEffect(() => {
+    if (!loaded) fetchInstitution();
+  }, [loaded, fetchInstitution]);
+
+  const displayName = institution?.name || 'أتيندو';
+  const displayLogo = institution?.logo_url;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,12 +115,16 @@ export default function LoginForm({ onSwitchToRegister, onForgotPassword }: Logi
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
-              className="mx-auto mb-2 sm:mb-4 flex h-12 w-12 sm:h-16 sm:w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-lg"
+              className="mx-auto mb-2 sm:mb-4 flex h-12 w-12 sm:h-16 sm:w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-lg overflow-hidden"
             >
-              <GraduationCap className="h-8 w-8 text-white" />
+              {displayLogo ? (
+                <img src={displayLogo} alt={displayName} className="h-full w-full object-cover" />
+              ) : (
+                <GraduationCap className="h-8 w-8 text-white" />
+              )}
             </motion.div>
             <CardTitle className="text-xl sm:text-2xl font-bold text-gray-900">
-              مرحباً بك في أتيندو
+              مرحباً بك في {displayName}
             </CardTitle>
             <CardDescription className="text-gray-500 mt-1 sm:mt-2 text-xs sm:text-sm">
               سجّل دخولك للمتابعة إلى منصتك التعليمية

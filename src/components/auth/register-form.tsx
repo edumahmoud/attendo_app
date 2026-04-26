@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Mail,
@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/card';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppStore } from '@/stores/app-store';
+import { useInstitutionStore } from '@/stores/institution-store';
 import { toast } from 'sonner';
 
 interface RegisterFormProps {
@@ -60,6 +61,15 @@ export default function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
 
   const { signUpWithEmail, signInWithGoogle } = useAuthStore();
   const { setCurrentPage } = useAppStore();
+  const { institution, fetchInstitution, loaded } = useInstitutionStore();
+
+  // Fetch institution data on mount
+  useEffect(() => {
+    if (!loaded) fetchInstitution();
+  }, [loaded, fetchInstitution]);
+
+  const displayName = institution?.name || 'أتيندو';
+  const displayLogo = institution?.logo_url;
 
   const passwordStrength = useMemo(() => getPasswordStrength(password), [password]);
 
@@ -155,15 +165,19 @@ export default function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
-              className="mx-auto mb-2 sm:mb-4 flex h-12 w-12 sm:h-16 sm:w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-lg"
+              className="mx-auto mb-2 sm:mb-4 flex h-12 w-12 sm:h-16 sm:w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-lg overflow-hidden"
             >
-              <GraduationCap className="h-8 w-8 text-white" />
+              {displayLogo ? (
+                <img src={displayLogo} alt={displayName} className="h-full w-full object-cover" />
+              ) : (
+                <GraduationCap className="h-8 w-8 text-white" />
+              )}
             </motion.div>
             <CardTitle className="text-xl sm:text-2xl font-bold text-gray-900">
               إنشاء حساب جديد
             </CardTitle>
             <CardDescription className="text-gray-500 mt-1 sm:mt-2 text-xs sm:text-sm">
-              انضم إلى أتيندو وابدأ رحلتك التعليمية
+              انضم إلى {displayName} وابدأ رحلتك التعليمية
             </CardDescription>
           </CardHeader>
 

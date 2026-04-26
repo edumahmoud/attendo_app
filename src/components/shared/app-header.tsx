@@ -9,6 +9,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { useAppStore } from '@/stores/app-store';
+import { useInstitutionStore } from '@/stores/institution-store';
 import NotificationBell from '@/components/shared/notification-bell';
 import UserAvatar from '@/components/shared/user-avatar';
 
@@ -119,14 +120,10 @@ export default function AppHeader({
           </button>
 
           {/* Logo */}
-          <div className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-600 shadow-sm">
-            <GraduationCap className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
-          </div>
+          <HeaderLogo />
 
           {/* App name */}
-          <h1 className="text-base sm:text-lg font-bold text-emerald-600 whitespace-nowrap">
-            أتيندو
-          </h1>
+          <HeaderTitle />
 
           {/* Section label - hidden on very small screens */}
           <ActiveSectionLabel role={userRole} />
@@ -247,5 +244,50 @@ function ActiveSectionLabel({ role }: { role: 'student' | 'teacher' | 'admin' | 
         {label}
       </span>
     </>
+  );
+}
+
+// -------------------------------------------------------
+// Header Logo — shows institution logo or default icon
+// -------------------------------------------------------
+function HeaderLogo() {
+  const { institution, fetchInstitution, loaded } = useInstitutionStore();
+
+  // Fetch institution data on first render
+  useEffect(() => {
+    if (!loaded) fetchInstitution();
+  }, [loaded, fetchInstitution]);
+
+  if (institution?.logo_url) {
+    return (
+      <img
+        src={institution.logo_url}
+        alt={institution.name}
+        className="h-8 w-8 sm:h-9 sm:w-9 shrink-0 rounded-xl object-cover border border-emerald-200 shadow-sm"
+      />
+    );
+  }
+
+  return (
+    <div className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-600 shadow-sm">
+      <GraduationCap className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+    </div>
+  );
+}
+
+// -------------------------------------------------------
+// Header Title — shows institution name or default "أتيندو"
+// -------------------------------------------------------
+function HeaderTitle() {
+  const { institution, fetchInstitution, loaded } = useInstitutionStore();
+
+  useEffect(() => {
+    if (!loaded) fetchInstitution();
+  }, [loaded, fetchInstitution]);
+
+  return (
+    <h1 className="text-base sm:text-lg font-bold text-emerald-600 whitespace-nowrap truncate max-w-[180px] sm:max-w-[250px]">
+      {institution?.name || 'أتيندو'}
+    </h1>
   );
 }

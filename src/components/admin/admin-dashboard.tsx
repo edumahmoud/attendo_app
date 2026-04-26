@@ -108,7 +108,7 @@ const adminNavItems = [
   { id: 'banned', label: 'المحظورون', icon: <Ban className="h-5 w-5" /> },
   { id: 'reports', label: 'التقارير', icon: <TrendingUp className="h-5 w-5" /> },
   { id: 'settings', label: 'الإعدادات', icon: <Settings className="h-5 w-5" /> },
-  { id: 'institution', label: 'المؤسسة', icon: <Building2 className="h-5 w-5" /> },
+  { id: 'institution', label: 'المؤسسة', icon: <Building2 className="h-5 w-5" />, superadminOnly: true },
 ];
 
 // -------------------------------------------------------
@@ -2567,10 +2567,10 @@ export default function AdminDashboard({ profile, onSignOut }: AdminDashboardPro
 
       {/* Sidebar */}
       <AppSidebar
-        role="admin"
+        role={profile.role as 'student' | 'teacher' | 'admin'}
         activeSection={activeSection}
         onSectionChange={handleSectionChange}
-        customNavItems={adminNavItems}
+        customNavItems={adminNavItems.filter(item => !(item as { superadminOnly?: boolean }).superadminOnly || profile.role === 'superadmin')}
       />
 
       {/* Main content - dynamic offset for collapsible sidebar */}

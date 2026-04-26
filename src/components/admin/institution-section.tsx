@@ -24,6 +24,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
+import { useInstitutionStore } from '@/stores/institution-store';
 import type { UserProfile } from '@/lib/types';
 
 // ─── Types ───
@@ -88,6 +89,8 @@ export default function InstitutionSection({ profile }: InstitutionSectionProps)
           const inst = data.institution as InstitutionData;
           setInstitution(inst);
           setOriginalData(JSON.stringify(inst));
+          // Update the global institution store so header/auth pages reflect changes
+          useInstitutionStore.getState().setInstitution(inst);
         }
       }
     } catch {
@@ -164,9 +167,16 @@ export default function InstitutionSection({ profile }: InstitutionSectionProps)
 
     setSaving(true);
     try {
+      // Get auth token for the request
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || '';
+
       const res = await fetch('/api/setup', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           action: 'save_institution',
           name: institution.name.trim(),
