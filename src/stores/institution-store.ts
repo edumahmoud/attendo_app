@@ -16,6 +16,7 @@ export interface InstitutionData {
   phone?: string | null;
   email?: string | null;
   website?: string | null;
+  timezone?: string | null;
   academic_year?: string | null;
   description?: string | null;
   created_at?: string;

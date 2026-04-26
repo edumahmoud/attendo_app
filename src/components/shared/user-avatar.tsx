@@ -25,7 +25,8 @@ export function getTitleLabel(titleId?: string | null, gender?: string | null): 
 export function getRoleLabel(role: string, gender?: string | null, titleId?: string | null): string {
   const isFemale = gender === 'female';
   if (role === 'student') return isFemale ? 'طالبة' : 'طالب';
-  if (role === 'admin' || role === 'superadmin') return isFemale ? 'مشرفة' : 'مشرف';
+  if (role === 'superadmin') return isFemale ? 'مديرة المنصة' : 'مدير المنصة';
+  if (role === 'admin') return isFemale ? 'مشرفة' : 'مشرف';
   // For teachers, show academic title if available
   const title = getTitleLabel(titleId, gender);
   return title || (isFemale ? 'معلمة' : 'معلم');

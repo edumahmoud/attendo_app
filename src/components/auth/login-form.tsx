@@ -34,7 +34,7 @@ export default function LoginForm({ onSwitchToRegister, onForgotPassword }: Logi
     if (!loaded) fetchInstitution();
   }, [loaded, fetchInstitution]);
 
-  const displayName = institution?.name || 'أتيندو';
+  const displayName = loaded ? (institution?.name || 'أتيندو') : '';
   const displayLogo = institution?.logo_url;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -124,7 +124,7 @@ export default function LoginForm({ onSwitchToRegister, onForgotPassword }: Logi
               )}
             </motion.div>
             <CardTitle className="text-xl sm:text-2xl font-bold text-gray-900">
-              مرحباً بك في {displayName}
+              {displayName ? `مرحباً بك في ${displayName}` : 'مرحباً بك'}
             </CardTitle>
             <CardDescription className="text-gray-500 mt-1 sm:mt-2 text-xs sm:text-sm">
               سجّل دخولك للمتابعة إلى منصتك التعليمية

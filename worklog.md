@@ -124,3 +124,31 @@ Stage Summary:
 - Notifications navigate to correct course tabs
 - Animated typing indicator in chat
 - Unread message count badge on chat icon in sidebar
+
+---
+Task ID: 5
+Agent: Main Agent
+Task: Fix 9 bugs reported by user - superadmin role label, sign-out redirect, profile click, sidebar/profile, avatar, login flash, logo upload, timezone, back button
+
+Work Log:
+- **Issue 1 (superadmin role label)**: Fixed in 3 places:
+  - `app-header.tsx`: Added `superadmin` to `userRole` prop type and roleLabel logic (مدير المنصة/مديرة المنصة)
+  - `admin-dashboard.tsx`: Changed hardcoded `userRole="admin"` to `profile.role as 'student' | 'teacher' | 'admin' | 'superadmin'` and added `titleId` prop
+  - `user-avatar.tsx`: Split `getRoleLabel` to handle superadmin separately from admin
+- **Issue 2 (sign-out redirect)**: Added condition `currentPage !== 'auth'` before setting auth page to prevent dashboard flash during sign-out
+- **Issue 3 (remove profile click from name)**: Removed `onClick` and `onKeyDown` handlers from the name/avatar area in header; entire button area now only toggles dropdown
+- **Issue 4 (sidebar/profile overlap)**: The profile page was rendered as a separate full page without sidebar; this is the expected behavior (profile replaces dashboard). Added proper `userRole` type to include `superadmin`
+- **Issue 5 (avatar not showing)**: Root cause was `userRole="admin"` hardcoded in admin dashboard - now uses `profile.role`. Also added `titleId` prop pass-through
+- **Issue 6 (أتيندو flashing on login)**: Changed login form to only show institution name after data is loaded (`loaded ? ... : ''`), and header title shows non-breaking space while loading
+- **Issue 7 (logo upload error)**: Fixed response parsing - the `/api/avatar` endpoint returns `{ success, data: { avatar_url } }` not `{ url }`. Updated to check both `data.data?.avatar_url` and `data.url`
+- **Issue 8 (timezone in institution settings)**: Added `timezone` field to institution data type, save payload, and UI with select dropdown containing 27 timezone options (Arabic-focused)
+- **Issue 9 (white back button)**: Changed button styling from `border-white/30 text-white` to `border-emerald-400/50 text-emerald-100` for better visibility
+
+Stage Summary:
+- Superadmin role label now correctly shows "مدير المنصة" everywhere (header, profile, user list)
+- Sign-out goes directly to auth page without dashboard flash
+- Clicking user area in header opens dropdown only (no profile navigation)
+- Logo upload now correctly parses API response
+- Login page no longer flashes "أتيندو" before institution name loads
+- Timezone selector added to institution settings
+- Back button in setup wizard has visible green-tinted styling

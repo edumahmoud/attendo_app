@@ -43,6 +43,7 @@ interface InstitutionData {
   phone?: string | null;
   email?: string | null;
   website?: string | null;
+  timezone?: string | null;
   academic_year?: string | null;
   description?: string | null;
   created_at?: string;
@@ -141,8 +142,10 @@ export default function InstitutionSection({ profile }: InstitutionSectionProps)
       });
 
       const data = await res.json();
-      if (data.success && data.url) {
-        updateField('logo_url', data.url);
+      // The avatar API returns { success: true, data: { avatar_url } } or { error }
+      const logoUrl = data.data?.avatar_url || data.url;
+      if ((data.success || data.url) && logoUrl) {
+        updateField('logo_url', logoUrl);
         toast.success('تم رفع الشعار بنجاح');
       } else {
         toast.error(data.error || 'حدث خطأ أثناء رفع الشعار');
@@ -189,6 +192,7 @@ export default function InstitutionSection({ profile }: InstitutionSectionProps)
           phone: institution.phone?.trim() || null,
           email: institution.email?.trim() || null,
           website: institution.website?.trim() || null,
+          timezone: institution.timezone?.trim() || null,
           academic_year: institution.academic_year?.trim() || null,
           description: institution.description?.trim() || null,
         }),
@@ -590,6 +594,49 @@ export default function InstitutionSection({ profile }: InstitutionSectionProps)
                     />
                     <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   </div>
+                </div>
+              </div>
+
+              {/* Timezone */}
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">المنطقة الزمنية</Label>
+                <div className="relative">
+                  <select
+                    value={institution.timezone || 'Africa/Cairo'}
+                    onChange={(e) => updateField('timezone', e.target.value)}
+                    className="h-10 w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 appearance-none"
+                    disabled={saving}
+                    dir="ltr"
+                  >
+                    <option value="Africa/Cairo">القاهرة (GMT+2)</option>
+                    <option value="Asia/Riyadh">الرياض (GMT+3)</option>
+                    <option value="Asia/Dubai">دبي (GMT+4)</option>
+                    <option value="Asia/Kuwait">الكويت (GMT+3)</option>
+                    <option value="Asia/Qatar">قطر (GMT+3)</option>
+                    <option value="Asia/Bahrain">البحرين (GMT+3)</option>
+                    <option value="Asia/Muscat">مسقط (GMT+4)</option>
+                    <option value="Africa/Casablanca">الدار البيضاء (GMT+1)</option>
+                    <option value="Africa/Tunis">تونس (GMT+1)</option>
+                    <option value="Africa/Algiers">الجزائر (GMT+1)</option>
+                    <option value="Asia/Amman">عمّان (GMT+3)</option>
+                    <option value="Asia/Baghdad">بغداد (GMT+3)</option>
+                    <option value="Asia/Damascus">دمشق (GMT+3)</option>
+                    <option value="Asia/Beirut">بيروت (GMT+3)</option>
+                    <option value="Asia/Jerusalem">القدس (GMT+3)</option>
+                    <option value="Asia/Jeddah">جدة (GMT+3)</option>
+                    <option value="Europe/Istanbul">إسطنبول (GMT+3)</option>
+                    <option value="Europe/London">لندن (GMT+0)</option>
+                    <option value="Europe/Paris">باريس (GMT+1)</option>
+                    <option value="America/New_York">نيويورك (GMT-5)</option>
+                    <option value="America/Chicago">شيكاغو (GMT-6)</option>
+                    <option value="America/Denver">دنفر (GMT-7)</option>
+                    <option value="America/Los_Angeles">لوس أنجلوس (GMT-8)</option>
+                    <option value="Asia/Tokyo">طوكيو (GMT+9)</option>
+                    <option value="Asia/Shanghai">شنغهاي (GMT+8)</option>
+                    <option value="Asia/Kolkata">مومباي (GMT+5:30)</option>
+                    <option value="Australia/Sydney">سيدني (GMT+11)</option>
+                  </select>
+                  <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                 </div>
               </div>
             </div>

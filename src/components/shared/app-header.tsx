@@ -21,7 +21,7 @@ import UserAvatar from '@/components/shared/user-avatar';
 interface AppHeaderProps {
   userName: string;
   userId: string;
-  userRole: 'student' | 'teacher' | 'admin';
+  userRole: 'student' | 'teacher' | 'admin' | 'superadmin';
   userGender?: string | null;
   titleId?: string | null;
   avatarUrl?: string;
@@ -68,21 +68,23 @@ export default function AppHeader({
     initStatusStore();
   }, [initStatusStore]);
 
-  // Gender-aware role label (teachers show their academic title)
+  // Gender-aware role label
   const isFemale = userGender === 'female';
   const roleLabel = userRole === 'student'
     ? (isFemale ? 'طالبة' : 'طالب')
-    : userRole === 'admin'
-      ? (isFemale ? 'مشرفة' : 'مشرف')
-      : (() => {
-          // For teachers, show academic title if available, otherwise default to معلم/معلمة
-          const effectiveTitleId = titleId || 'teacher';
-          const title = ACADEMIC_TITLES.find(t => t.value === effectiveTitleId);
-          if (title) {
-            return isFemale ? title.femaleLabel : title.label;
-          }
-          return isFemale ? 'معلمة' : 'معلم';
-        })();
+    : userRole === 'superadmin'
+      ? (isFemale ? 'مديرة المنصة' : 'مدير المنصة')
+      : userRole === 'admin'
+        ? (isFemale ? 'مشرفة' : 'مشرف')
+        : (() => {
+            // For teachers, show academic title if available, otherwise default to معلم/معلمة
+            const effectiveTitleId = titleId || 'teacher';
+            const title = ACADEMIC_TITLES.find(t => t.value === effectiveTitleId);
+            if (title) {
+              return isFemale ? title.femaleLabel : title.label;
+            }
+            return isFemale ? 'معلمة' : 'معلم';
+          })();
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -149,16 +151,10 @@ export default function AppHeader({
               onClick={() => setDropdownOpen(!dropdownOpen)}
               className="flex items-center gap-1.5 sm:gap-2.5 rounded-lg px-1.5 sm:px-3 py-1.5 sm:py-2 hover:bg-muted/50 active:bg-muted/80 transition-colors min-w-0 touch-manipulation"
             >
-              {/* Avatar + Name — clicking opens profile */}
-              <div
-                role="button"
-                tabIndex={0}
-                onClick={(e) => { e.stopPropagation(); openProfile(userId); }}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); openProfile(userId); } }}
-                className="hidden sm:flex items-center gap-2 sm:gap-2.5 rounded-lg px-1 py-0.5 -mx-1 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors group/profile min-w-0 cursor-pointer"
-              >
+              {/* Avatar + Name — whole area opens dropdown */}
+              <div className="hidden sm:flex items-center gap-2 sm:gap-2.5 min-w-0">
                 <div className="flex flex-col items-end min-w-0">
-                  <span className="text-sm font-semibold text-foreground truncate max-w-[140px] group-hover/profile:text-emerald-600 transition-colors">
+                  <span className="text-sm font-semibold text-foreground truncate max-w-[140px]">
                     {userName}
                   </span>
                   <span className="text-xs text-emerald-600 font-medium">
@@ -310,7 +306,7 @@ function HeaderTitle() {
 
   return (
     <h1 className="text-base sm:text-lg font-bold text-emerald-600 whitespace-nowrap truncate max-w-[180px] sm:max-w-[250px]">
-      {institution?.name || 'أتيندو'}
+      {loaded ? (institution?.name || 'أتيندو') : '\u00A0'}
     </h1>
   );
 }

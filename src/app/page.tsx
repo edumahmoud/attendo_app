@@ -112,7 +112,9 @@ function HomeContent() {
               : 'student-dashboard'
         );
       }
-    } else {
+    } else if (currentPage !== 'auth') {
+      // Only set to auth if we're not already on auth page
+      // This prevents flicker during sign-out
       setCurrentPage('auth');
     }
   }, [user, initialized, currentPage, setCurrentPage, wizardInProgress]);
@@ -287,11 +289,11 @@ function HomeContent() {
   if (currentPage === 'profile' && profileUserId) {
     return (
       <SocketProvider>
-        <div className="min-h-screen bg-background relative z-10" dir="rtl">
+        <div className="min-h-screen bg-background" dir="rtl">
           <AppHeader
             userName={user.name}
             userId={user.id}
-            userRole={user.role as 'student' | 'teacher' | 'admin'}
+            userRole={user.role as 'student' | 'teacher' | 'admin' | 'superadmin'}
             userGender={user.gender}
             titleId={user.title_id}
             avatarUrl={user.avatar_url}

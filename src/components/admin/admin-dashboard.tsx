@@ -2875,8 +2875,9 @@ export default function AdminDashboard({ profile, onSignOut }: AdminDashboardPro
       <AppHeader
         userName={profile.name}
         userId={profile.id}
-        userRole="admin"
+        userRole={profile.role as 'student' | 'teacher' | 'admin' | 'superadmin'}
         userGender={profile.gender}
+        titleId={profile.title_id}
         avatarUrl={profile.avatar_url}
         onSignOut={onSignOut}
         onOpenSettings={() => handleSectionChange('settings')}
