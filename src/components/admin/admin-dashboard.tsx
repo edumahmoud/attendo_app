@@ -36,6 +36,7 @@ import {
   Radio,
   ArrowUpRight,
   ArrowDownRight,
+  Building2,
 } from 'lucide-react';
 import {
   BarChart as RechartsBarChart,
@@ -57,6 +58,7 @@ import { supabase } from '@/lib/supabase';
 import AppSidebar from '@/components/shared/app-sidebar';
 import AppHeader from '@/components/shared/app-header';
 import SettingsSection from '@/components/shared/settings-section';
+import InstitutionSection from '@/components/admin/institution-section';
 import StatCard from '@/components/shared/stat-card';
 import UserAvatar, { formatNameWithTitle } from '@/components/shared/user-avatar';
 import UserLink from '@/components/shared/user-link';
@@ -106,6 +108,7 @@ const adminNavItems = [
   { id: 'banned', label: 'المحظورون', icon: <Ban className="h-5 w-5" /> },
   { id: 'reports', label: 'التقارير', icon: <TrendingUp className="h-5 w-5" /> },
   { id: 'settings', label: 'الإعدادات', icon: <Settings className="h-5 w-5" /> },
+  { id: 'institution', label: 'المؤسسة', icon: <Building2 className="h-5 w-5" /> },
 ];
 
 // -------------------------------------------------------
@@ -2610,6 +2613,11 @@ export default function AdminDashboard({ profile, onSignOut }: AdminDashboardPro
               {activeSection === 'settings' && (
                 <motion.div key="settings" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }}>
                   <SettingsSection profile={profile} onUpdateProfile={handleUpdateProfile} onDeleteAccount={handleDeleteAccount} />
+                </motion.div>
+              )}
+              {activeSection === 'institution' && (
+                <motion.div key="institution" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }}>
+                  <InstitutionSection profile={profile} />
                 </motion.div>
               )}
             </AnimatePresence>

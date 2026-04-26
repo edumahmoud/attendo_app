@@ -38,6 +38,7 @@ type WizardStep = 'db-migration' | 'admin-account' | 'institution-info' | 'compl
 interface SetupWizardProps {
   onComplete: () => void;
   onStart?: () => void;
+  onError?: () => void;  // Called when signup fails, to reset wizardInProgress
 }
 
 // ─── Password Strength ───
@@ -110,7 +111,7 @@ function StepIndicator({ currentStep, showMigration }: { currentStep: WizardStep
 
 // ─── Main Component ───
 
-export default function SetupWizard({ onComplete, onStart }: SetupWizardProps) {
+export default function SetupWizard({ onComplete, onStart, onError }: SetupWizardProps) {
   const [step, setStep] = useState<WizardStep>('admin-account');
   const [tableExists, setTableExists] = useState(true); // assume table exists until proven otherwise
 
@@ -178,6 +179,11 @@ export default function SetupWizard({ onComplete, onStart }: SetupWizardProps) {
     }
 
     setCreatingAccount(true);
+    // Signal that the wizard is now in progress BEFORE the signup call.
+    // This prevents a race condition where the auth state change (which sets
+    // `user` in Zustand) causes the parent to hide the SetupWizard before
+    // we can transition to the institution-info step.
+    onStart?.();
     try {
       // Sign up with role = superadmin
       const { data: signUpData, error: authError } = await supabase.auth.signUp({
@@ -199,6 +205,7 @@ export default function SetupWizard({ onComplete, onStart }: SetupWizardProps) {
         } else {
           toast.error('حدث خطأ أثناء إنشاء الحساب');
         }
+        onError?.();
         return;
       }
 
@@ -206,12 +213,14 @@ export default function SetupWizard({ onComplete, onStart }: SetupWizardProps) {
       const needsConfirmation = !!signUpData.user && !signUpData.session;
       if (needsConfirmation) {
         toast.error('يجب تعطيل تأكيد البريد الإلكتروني في Supabase للإعداد الأولي');
+        onError?.();
         return;
       }
 
       const authUser = signUpData.user;
       if (!authUser) {
         toast.error('فشل في إنشاء الحساب');
+        onError?.();
         return;
       }
 
@@ -245,12 +254,10 @@ export default function SetupWizard({ onComplete, onStart }: SetupWizardProps) {
 
       setAdminUserId(authUser.id);
       toast.success('تم إنشاء حساب المدير بنجاح');
-      // Signal that the wizard is now in progress (user will get a session,
-      // but we must not interrupt the wizard flow)
-      onStart?.();
       setStep('institution-info');
     } catch {
       toast.error('حدث خطأ غير متوقع');
+      onError?.();
     } finally {
       setCreatingAccount(false);
     }

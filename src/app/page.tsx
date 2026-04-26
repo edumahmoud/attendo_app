@@ -53,6 +53,11 @@ function HomeContent() {
     setWizardInProgress(true);
   }, []);
 
+  // Handle setup wizard error (reset wizardInProgress if signup fails)
+  const handleWizardError = useCallback(() => {
+    setWizardInProgress(false);
+  }, []);
+
   // Handle setup wizard completion
   const handleSetupComplete = useCallback(() => {
     setNeedsSetup(false);
@@ -168,7 +173,7 @@ function HomeContent() {
   // the user creates their admin account and gets a session, so they can
   // complete the institution details step.
   if (needsSetup && (!user || wizardInProgress)) {
-    return <SetupWizard onComplete={handleSetupComplete} onStart={handleWizardStart} />;
+    return <SetupWizard onComplete={handleSetupComplete} onStart={handleWizardStart} onError={handleWizardError} />;
   }
 
   // Auth pages (login / register)
