@@ -40,6 +40,9 @@ import {
   MessageCircle,
   Clock,
   Gavel,
+  LayoutGrid,
+  List,
+  ArrowUpDown,
 } from 'lucide-react';
 import {
   BarChart as RechartsBarChart,
@@ -131,6 +134,21 @@ function formatDate(dateStr: string): string {
   }
 }
 
+// Format date with exact time
+function formatDateTime(dateStr: string): string {
+  try {
+    return new Date(dateStr).toLocaleDateString('ar-SA', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
 // -------------------------------------------------------
 // Role label helper
 // -------------------------------------------------------
@@ -161,6 +179,38 @@ function getRoleBadgeClass(role: string): string {
       return 'bg-blue-100 text-blue-700 border-blue-200';
     default:
       return 'bg-gray-100 text-gray-700 border-gray-200';
+  }
+}
+
+// Role-based card styling (border color)
+function getRoleCardClass(role: string): string {
+  switch (role) {
+    case 'superadmin':
+      return 'border-amber-200 hover:border-amber-400';
+    case 'admin':
+      return 'border-purple-200 hover:border-purple-400';
+    case 'teacher':
+      return 'border-emerald-200 hover:border-emerald-400';
+    case 'student':
+      return 'border-sky-200 hover:border-sky-400';
+    default:
+      return 'border-border';
+  }
+}
+
+// Role-based card top accent bar color
+function getRoleAccentClass(role: string): string {
+  switch (role) {
+    case 'superadmin':
+      return 'bg-amber-500';
+    case 'admin':
+      return 'bg-purple-500';
+    case 'teacher':
+      return 'bg-emerald-500';
+    case 'student':
+      return 'bg-sky-500';
+    default:
+      return 'bg-gray-400';
   }
 }
 
@@ -220,6 +270,8 @@ export default function AdminDashboard({ profile, onSignOut }: AdminDashboardPro
   const [userDetailOpen, setUserDetailOpen] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [confirmDeleteUser, setConfirmDeleteUser] = useState<string | null>(null);
+  const [userDisplayMode, setUserDisplayMode] = useState<'grid' | 'list'>('grid');
+  const [userSortOrder, setUserSortOrder] = useState<'newest' | 'oldest'>('newest');
 
   // ─── Subject detail ───
   const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null);
@@ -467,13 +519,19 @@ export default function AdminDashboard({ profile, onSignOut }: AdminDashboardPro
     ? Math.round(allScores.reduce((sum, s) => sum + scorePercentage(s.score, s.total), 0) / allScores.length)
     : 0;
 
-  const filteredUsers = allUsers.filter((u) => {
-    const matchesRole = roleFilter === 'all' || u.role === roleFilter;
-    const matchesSearch =
-      u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
-      u.email.toLowerCase().includes(userSearch.toLowerCase());
-    return matchesRole && matchesSearch;
-  });
+  const filteredUsers = allUsers
+    .filter((u) => {
+      const matchesRole = roleFilter === 'all' || u.role === roleFilter;
+      const matchesSearch =
+        u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
+        u.email.toLowerCase().includes(userSearch.toLowerCase());
+      return matchesRole && matchesSearch;
+    })
+    .sort((a, b) => {
+      const dateA = new Date(a.created_at).getTime();
+      const dateB = new Date(b.created_at).getTime();
+      return userSortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+    });
 
   // User growth per month (for reports section)
   const userGrowthByMonth = (() => {
@@ -1138,6 +1196,9 @@ export default function AdminDashboard({ profile, onSignOut }: AdminDashboardPro
   // -------------------------------------------------------
   // Render: Users Section
   // -------------------------------------------------------
+  // Check if user is self (admin/supervisor viewing themselves)
+  const isSelf = (userId: string) => userId === profile.id;
+
   const renderUsers = () => (
     <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-6">
       {/* Header */}
@@ -1146,9 +1207,37 @@ export default function AdminDashboard({ profile, onSignOut }: AdminDashboardPro
           <h2 className="text-2xl font-bold text-foreground">المستخدمون</h2>
           <p className="text-muted-foreground mt-1">إدارة جميع المستخدمين على المنصة</p>
         </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Users className="h-4 w-4" />
-          <span>{filteredUsers.length} مستخدم</span>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Users className="h-4 w-4" />
+            <span>{filteredUsers.length} مستخدم</span>
+          </div>
+          {/* Display mode toggle */}
+          <div className="flex items-center rounded-lg border bg-muted/50">
+            <button
+              onClick={() => setUserDisplayMode('grid')}
+              className={`p-1.5 rounded-r-lg transition-colors ${userDisplayMode === 'grid' ? 'bg-purple-600 text-white' : 'text-muted-foreground hover:text-foreground'}`}
+              title="عرض شبكي"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setUserDisplayMode('list')}
+              className={`p-1.5 rounded-l-lg transition-colors ${userDisplayMode === 'list' ? 'bg-purple-600 text-white' : 'text-muted-foreground hover:text-foreground'}`}
+              title="عرض قائمة"
+            >
+              <List className="h-4 w-4" />
+            </button>
+          </div>
+          {/* Sort toggle */}
+          <button
+            onClick={() => setUserSortOrder(prev => prev === 'newest' ? 'oldest' : 'newest')}
+            className="flex items-center gap-1.5 rounded-lg border bg-muted/50 px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+            title={userSortOrder === 'newest' ? 'ترتيب: الأحدث أولاً' : 'ترتيب: الأقدم أولاً'}
+          >
+            <ArrowUpDown className="h-3.5 w-3.5" />
+            {userSortOrder === 'newest' ? 'الأحدث' : 'الأقدم'}
+          </button>
         </div>
       </motion.div>
 
@@ -1182,7 +1271,7 @@ export default function AdminDashboard({ profile, onSignOut }: AdminDashboardPro
         </div>
       </motion.div>
 
-      {/* Users grid */}
+      {/* Users display */}
       {filteredUsers.length === 0 ? (
         <motion.div
           variants={itemVariants}
@@ -1198,80 +1287,99 @@ export default function AdminDashboard({ profile, onSignOut }: AdminDashboardPro
             {userSearch || roleFilter !== 'all' ? 'جرّب البحث بكلمات مختلفة' : 'سيظهر المستخدمون هنا بعد تسجيلهم'}
           </p>
         </motion.div>
-      ) : (
+      ) : userDisplayMode === 'grid' ? (
+        /* ─── Grid view ─── */
         <motion.div variants={containerVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredUsers.map((user) => (
             <motion.div key={user.id} variants={itemVariants} {...cardHover}>
               <div
-                className="group rounded-xl border bg-card p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                className={`group relative rounded-xl border-2 bg-card shadow-sm hover:shadow-md transition-all cursor-pointer overflow-hidden ${getRoleCardClass(user.role)}`}
                 onClick={() => {
                   setSelectedUser(user);
                   setUserDetailOpen(true);
                 }}
               >
-                <div className="flex items-center gap-3 mb-3">
-                  <UserLink
-                    userId={user.id}
-                    name={user.name}
-                    avatarUrl={user.avatar_url}
-                    role={user.role}
-                    gender={user.gender}
-                    titleId={user.title_id}
-                    size="sm"
-                    showAvatar={true}
-                    showRole={false}
-                    showUsername={false}
-                    className="flex-1 min-w-0"
-                  />
-                </div>
-
-                <div className="flex items-center justify-between mb-3">
-                  <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold border ${getRoleBadgeClass(user.role)}`}>
-                    {getRoleLabel(user.role)}
-                  </span>
-                  <span className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Calendar className="h-3 w-3" />
-                    {formatDate(user.created_at)}
-                  </span>
-                </div>
-
-                {/* Delete button - not for superadmins */}
-                {user.role !== 'superadmin' && (
-                  <div className="flex items-center justify-end pt-2 border-t">
-                    {confirmDeleteUser === user.id ? (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleDeleteUser(user.id)}
-                          disabled={deletingUserId === user.id}
-                          className="flex items-center gap-1 rounded-lg bg-rose-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-rose-700 transition-colors disabled:opacity-60"
-                        >
-                          {deletingUserId === user.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            'تأكيد'
-                          )}
-                        </button>
-                        <button
-                          onClick={() => setConfirmDeleteUser(null)}
-                          className="flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"
-                        >
-                          إلغاء
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setConfirmDeleteUser(user.id)}
-                        className="flex items-center gap-1 text-xs text-rose-500 hover:text-rose-600 font-medium transition-colors"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        حذف
-                      </button>
-                    )}
+                {/* Accent top bar */}
+                <div className={`h-1 w-full ${getRoleAccentClass(user.role)}`} />
+                <div className="p-3 sm:p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <UserAvatar name={user.name} avatarUrl={user.avatar_url} size="sm" />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium text-foreground truncate block">
+                        {formatNameWithTitle(user.name, user.role, user.gender, user.title_id)}
+                      </span>
+                      <span className="text-xs text-muted-foreground truncate block mt-0.5">{user.email}</span>
+                    </div>
                   </div>
-                )}
+
+                  <div className="flex items-center justify-between">
+                    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold border ${getRoleBadgeClass(user.role)}`}>
+                      {getRoleLabel(user.role)}
+                    </span>
+                    <span className="text-xs text-muted-foreground flex items-center gap-1" title={formatDateTime(user.created_at)}>
+                      <Clock className="h-3 w-3" />
+                      {formatDateTime(user.created_at)}
+                    </span>
+                  </div>
+                </div>
               </div>
             </motion.div>
           ))}
+        </motion.div>
+      ) : (
+        /* ─── List view ─── */
+        <motion.div variants={containerVariants} className="rounded-xl border bg-card shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-muted/50 sticky top-0">
+                <tr className="text-xs text-muted-foreground">
+                  <th className="text-right font-medium p-3">المستخدم</th>
+                  <th className="text-right font-medium p-3 hidden sm:table-cell">البريد الإلكتروني</th>
+                  <th className="text-right font-medium p-3">الصفة</th>
+                  <th className="text-right font-medium p-3">وقت التسجيل</th>
+                  <th className="text-right font-medium p-3 w-12"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {filteredUsers.map((user) => (
+                  <tr
+                    key={user.id}
+                    className={`hover:bg-muted/30 transition-colors cursor-pointer border-r-4 ${getRoleCardClass(user.role)}`}
+                    onClick={() => {
+                      setSelectedUser(user);
+                      setUserDetailOpen(true);
+                    }}
+                  >
+                    <td className="p-3">
+                      <div className="flex items-center gap-2.5">
+                        <UserAvatar name={user.name} avatarUrl={user.avatar_url} size="xs" />
+                        <span className="text-sm font-medium text-foreground truncate max-w-[150px]">
+                          {formatNameWithTitle(user.name, user.role, user.gender, user.title_id)}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="p-3 hidden sm:table-cell">
+                      <span className="text-sm text-muted-foreground truncate max-w-[200px] block">{user.email}</span>
+                    </td>
+                    <td className="p-3">
+                      <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold border ${getRoleBadgeClass(user.role)}`}>
+                        {getRoleLabel(user.role)}
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      <span className="text-xs text-muted-foreground flex items-center gap-1 whitespace-nowrap">
+                        <Clock className="h-3 w-3" />
+                        {formatDateTime(user.created_at)}
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      <ChevronLeft className="h-4 w-4 text-muted-foreground" />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </motion.div>
       )}
 
@@ -1298,18 +1406,17 @@ export default function AdminDashboard({ profile, onSignOut }: AdminDashboardPro
             >
               {/* Header */}
               <div className="flex items-center justify-between border-b p-5">
-                <UserLink
-                  userId={selectedUser.id}
-                  name={selectedUser.name}
-                  avatarUrl={selectedUser.avatar_url}
-                  role={selectedUser.role}
-                  gender={selectedUser.gender}
-                  titleId={selectedUser.title_id}
-                  size="lg"
-                  showAvatar={true}
-                  showRole={true}
-                  showUsername={false}
-                />
+                <div className="flex items-center gap-3">
+                  <UserAvatar name={selectedUser.name} avatarUrl={selectedUser.avatar_url} size="lg" />
+                  <div>
+                    <span className="text-base font-semibold text-foreground block">
+                      {formatNameWithTitle(selectedUser.name, selectedUser.role, selectedUser.gender, selectedUser.title_id)}
+                    </span>
+                    <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold border ${getRoleBadgeClass(selectedUser.role)}`}>
+                      {getRoleLabel(selectedUser.role)}
+                    </span>
+                  </div>
+                </div>
                 <button
                   onClick={() => setUserDetailOpen(false)}
                   className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted transition-colors"
@@ -1328,7 +1435,7 @@ export default function AdminDashboard({ profile, onSignOut }: AdminDashboardPro
                   <div className="flex items-center gap-3">
                     <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
                     <span className="text-sm text-muted-foreground">
-                      تاريخ التسجيل: {formatDate(selectedUser.created_at)}
+                      وقت التسجيل: {formatDateTime(selectedUser.created_at)}
                     </span>
                   </div>
                   {selectedUser.role === 'teacher' && selectedUser.teacher_code && (
@@ -1363,52 +1470,50 @@ export default function AdminDashboard({ profile, onSignOut }: AdminDashboardPro
                   </div>
                 )}
 
-                {/* Role change section */}
-                <div className="rounded-lg border border-purple-200 bg-purple-50/50 p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Shield className="h-4 w-4 text-purple-500" />
-                    <span className="text-sm font-semibold text-purple-600">تغيير الدور</span>
-                  </div>
-                  <p className="text-xs text-purple-600 mb-3">
-                    تغيير دور المستخدم في المنصة
-                  </p>
-                  <div className="flex gap-2 flex-wrap">
-                    {/* Determine which roles can be assigned based on current admin's role */}
-                    {(['student', 'teacher', 'admin', 'superadmin'] as const)
-                      .filter((role) => {
-                        // Superadmins can assign any role
-                        if (profile.role === 'superadmin') return true;
-                        // Admins can only assign student/teacher
-                        if (profile.role === 'admin') return role !== 'superadmin' && role !== 'admin';
-                        return false;
-                      })
-                      .map((role) => (
-                      <button
-                        key={role}
-                        onClick={() => handleChangeRole(selectedUser.id, role)}
-                        disabled={changingRole || selectedUser.role === role}
-                        className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-                          selectedUser.role === role
-                            ? 'bg-purple-600 text-white cursor-default'
-                            : 'border border-purple-200 text-purple-700 hover:bg-purple-100 disabled:opacity-50'
-                        }`
-                      }
-                      >
-                        {changingRole ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                        {getRoleLabel(role)}
-                      </button>
-                    ))}
-                  </div>
-                  {profile.role !== 'superadmin' && (
-                    <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
-                      <Shield className="h-3 w-3" />
-                      مدير المنصة فقط يمكنه تعيين أدوار المشرف ومدير المنصة
+                {/* Role change section - not for self */}
+                {!isSelf(selectedUser.id) && (
+                  <div className="rounded-lg border border-purple-200 bg-purple-50/50 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Shield className="h-4 w-4 text-purple-500" />
+                      <span className="text-sm font-semibold text-purple-600">تغيير الدور</span>
+                    </div>
+                    <p className="text-xs text-purple-600 mb-3">
+                      تغيير دور المستخدم في المنصة
                     </p>
-                  )}
-                </div>
+                    <div className="flex gap-2 flex-wrap">
+                      {(['student', 'teacher', 'admin', 'superadmin'] as const)
+                        .filter((role) => {
+                          if (profile.role === 'superadmin') return true;
+                          if (profile.role === 'admin') return role !== 'superadmin' && role !== 'admin';
+                          return false;
+                        })
+                        .map((role) => (
+                          <button
+                            key={role}
+                            onClick={() => handleChangeRole(selectedUser.id, role)}
+                            disabled={changingRole || selectedUser.role === role}
+                            className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                              selectedUser.role === role
+                                ? 'bg-purple-600 text-white cursor-default'
+                                : 'border border-purple-200 text-purple-700 hover:bg-purple-100 disabled:opacity-50'
+                            }`}
+                          >
+                            {changingRole ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                            {getRoleLabel(role)}
+                          </button>
+                        ))}
+                    </div>
+                    {profile.role !== 'superadmin' && (
+                      <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+                        <Shield className="h-3 w-3" />
+                        مدير المنصة فقط يمكنه تعيين أدوار المشرف ومدير المنصة
+                      </p>
+                    )}
+                  </div>
+                )}
 
-                {/* Danger zone - only show for non-superadmin users */}
-                {selectedUser.role !== 'superadmin' && (
+                {/* Danger zone - not for self and not for superadmins */}
+                {!isSelf(selectedUser.id) && selectedUser.role !== 'superadmin' && (
                   <div className="rounded-lg border border-rose-200 bg-rose-50/50 p-4 mt-4">
                     <div className="flex items-center gap-2 mb-2">
                       <AlertTriangle className="h-4 w-4 text-rose-500" />
@@ -1448,6 +1553,19 @@ export default function AdminDashboard({ profile, onSignOut }: AdminDashboardPro
                         حذف المستخدم
                       </button>
                     </div>
+                  </div>
+                )}
+
+                {/* Self-action notice */}
+                {isSelf(selectedUser.id) && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4">
+                    <div className="flex items-center gap-2">
+                      <Shield className="h-4 w-4 text-amber-500" />
+                      <span className="text-sm font-semibold text-amber-700">لا يمكنك اتخاذ إجراءات بحق حسابك</span>
+                    </div>
+                    <p className="text-xs text-amber-600 mt-1">
+                      لا يمكنك تغيير صفتك أو حظر أو حذف حسابك الخاص.
+                    </p>
                   </div>
                 )}
               </div>

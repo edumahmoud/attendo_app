@@ -337,3 +337,27 @@ Stage Summary:
 - Dynamic favicon and tab title implemented via InstitutionHead client component
 - API saves tagline when column exists, falls back gracefully when it doesn't
 - SQL needed: ALTER TABLE institution_settings ADD COLUMN IF NOT EXISTS tagline TEXT;
+
+---
+Task ID: 10
+Agent: Main Agent
+Task: User management section improvements (7 requirements)
+
+Work Log:
+1. **Removed delete button from user cards**: Deleted the inline delete/confirm UI that appeared on each card in the grid view. Delete action is now only available in the user detail modal.
+2. **Added exact registration time**: Created `formatDateTime()` helper that shows date + time (hour:minute). Replaced `formatDate()` with `formatDateTime()` in both grid cards, list view, and detail modal. Shows "وقت التسجيل" instead of "تاريخ التسجيل".
+3. **Disabled profile navigation from user cards**: Replaced `UserLink` components (which open profile on click) with plain `UserAvatar` + `formatNameWithTitle` text in both grid and list views. The card itself opens the admin detail modal instead.
+4. **Added display mode toggle**: Added `userDisplayMode` state ('grid' | 'list') and a toggle button group in the header with `LayoutGrid` and `List` icons. Grid view shows cards in a 3-column grid. List view shows a table with columns: User, Email, Role, Registration Time, and a chevron indicator.
+5. **Color-coded cards by role**: Added `getRoleCardClass()` (border colors) and `getRoleAccentClass()` (top bar colors) helpers. Grid cards have a colored top accent bar and matching border. List view rows have a colored right border (border-r-4). Colors: superadmin=amber, admin=purple, teacher=emerald, student=sky.
+6. **Added sort by registration date**: Added `userSortOrder` state ('newest' | 'oldest') and a toggle button. Modified `filteredUsers` computed value to include `.sort()` based on `created_at`. Button shows current order and toggles on click.
+7. **Prevented self-actions**: Added `isSelf()` helper that checks if userId matches profile.id. In the detail modal: role change section is hidden when viewing self, danger zone (ban/delete) is hidden when viewing self, and a notice message is shown instead: "لا يمكنك اتخاذ إجراءات بحق حسابك".
+
+Stage Summary:
+- Delete button removed from cards (only in detail modal)
+- Exact registration time with hours and minutes shown
+- No profile navigation from user cards (uses admin detail modal instead)
+- Grid/List view toggle implemented
+- Cards color-coded by role (amber/purple/emerald/sky)
+- Sort by newest/oldest registration date
+- Admin/supervisor cannot take actions on their own account
+- All changes pass lint
