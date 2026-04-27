@@ -151,6 +151,7 @@ export default function SetupWizard({ onComplete, onStart, onError }: SetupWizar
   const [institutionWebsite, setInstitutionWebsite] = useState('');
   const [institutionAcademicYear, setInstitutionAcademicYear] = useState('');
   const [institutionDescription, setInstitutionDescription] = useState('');
+  const [institutionTagline, setInstitutionTagline] = useState('');
   const [savingInstitution, setSavingInstitution] = useState(false);
 
   const passwordStrength = useMemo(() => getPasswordStrength(adminPassword), [adminPassword]);
@@ -284,6 +285,7 @@ export default function SetupWizard({ onComplete, onStart, onError }: SetupWizar
           name: institutionName.trim(),
           nameEn: institutionNameEn.trim() || null,
           type: institutionType,
+          tagline: institutionTagline.trim() || null,
           country: institutionCountry.trim() || null,
           city: institutionCity.trim() || null,
           address: institutionAddress.trim() || null,
@@ -322,6 +324,7 @@ CREATE TABLE IF NOT EXISTS institution_settings (
   name_en TEXT,
   type TEXT NOT NULL CHECK (type IN ('center', 'school', 'university')),
   logo_url TEXT,
+  tagline TEXT,
   country TEXT,
   city TEXT,
   address TEXT,
@@ -370,6 +373,7 @@ CREATE TRIGGER trg_institution_updated_at
 CREATE OR REPLACE FUNCTION setup_initialize_system(
   p_name TEXT, p_name_en TEXT DEFAULT NULL,
   p_type TEXT DEFAULT 'center', p_logo_url TEXT DEFAULT NULL,
+  p_tagline TEXT DEFAULT NULL,
   p_country TEXT DEFAULT NULL, p_city TEXT DEFAULT NULL,
   p_address TEXT DEFAULT NULL, p_phone TEXT DEFAULT NULL,
   p_email TEXT DEFAULT NULL, p_website TEXT DEFAULT NULL,
@@ -381,14 +385,14 @@ BEGIN
   SELECT id INTO v_existing_id FROM institution_settings LIMIT 1;
   IF v_existing_id IS NOT NULL THEN
     UPDATE institution_settings SET name=p_name, name_en=p_name_en, type=p_type,
-      logo_url=p_logo_url, country=p_country, city=p_city, address=p_address,
+      logo_url=p_logo_url, tagline=p_tagline, country=p_country, city=p_city, address=p_address,
       phone=p_phone, email=p_email, website=p_website,
       academic_year=p_academic_year, description=p_description
     WHERE id=v_existing_id;
     RETURN json_build_object('action','updated','id',v_existing_id);
   END IF;
-  INSERT INTO institution_settings(name,name_en,type,logo_url,country,city,address,phone,email,website,academic_year,description)
-  VALUES(p_name,p_name_en,p_type,p_logo_url,p_country,p_city,p_address,p_phone,p_email,p_website,p_academic_year,p_description)
+  INSERT INTO institution_settings(name,name_en,type,logo_url,tagline,country,city,address,phone,email,website,academic_year,description)
+  VALUES(p_name,p_name_en,p_type,p_logo_url,p_tagline,p_country,p_city,p_address,p_phone,p_email,p_website,p_academic_year,p_description)
   RETURNING id INTO v_id;
   RETURN json_build_object('action','created','id',v_id);
 END;
@@ -692,6 +696,24 @@ $$;`;
             />
             <FileText className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
           </div>
+        </div>
+
+        {/* Tagline */}
+        <div className="space-y-1.5">
+          <Label className="text-emerald-100 font-medium text-sm">شعار المؤسسة (Tagline)</Label>
+          <div className="relative">
+            <Input
+              type="text"
+              placeholder="عبارة قصيرة تصف المؤسسة..."
+              value={institutionTagline}
+              onChange={(e) => setInstitutionTagline(e.target.value)}
+              className="h-11 bg-white/10 border-white/20 text-white placeholder:text-white/40 focus:border-emerald-400 focus:ring-emerald-400/20"
+              disabled={savingInstitution}
+              maxLength={200}
+            />
+            <FileText className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
+          </div>
+          <p className="text-[10px] text-emerald-200/60">عبارة وصفية قصيرة تظهر بجانب اسم المؤسسة</p>
         </div>
 
         {/* Country + City */}

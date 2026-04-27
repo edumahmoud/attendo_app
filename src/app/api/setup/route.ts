@@ -112,6 +112,7 @@ export async function POST(request: NextRequest) {
       nameEn,
       type,
       logo_url,
+      tagline,
       country,
       city,
       address,
@@ -135,6 +136,7 @@ export async function POST(request: NextRequest) {
           p_name_en: nameEn || null,
           p_type: type,
           p_logo_url: logo_url || null,
+          p_tagline: tagline || null,
           p_country: country || null,
           p_city: city || null,
           p_address: address || null,
@@ -146,6 +148,20 @@ export async function POST(request: NextRequest) {
         });
 
       if (!rpcError && rpcData) {
+        // RPC succeeded, but tagline might not be supported by the old function
+        // Try to update tagline separately if provided
+        if (tagline !== undefined) {
+          const { data: existing } = await supabaseServer
+            .from('institution_settings')
+            .select('id')
+            .maybeSingle();
+          if (existing) {
+            await supabaseServer
+              .from('institution_settings')
+              .update({ tagline: tagline || null })
+              .eq('id', existing.id);
+          }
+        }
         return NextResponse.json({ success: true, action: rpcData.action || 'created', via: 'rpc' });
       }
 
@@ -156,36 +172,8 @@ export async function POST(request: NextRequest) {
         .maybeSingle();
 
       if (existing) {
-        const { error } = await supabaseServer
-          .from('institution_settings')
-          .update({
-            name,
-            name_en: nameEn || null,
-            type,
-            logo_url: logo_url || null,
-            country: country || null,
-            city: city || null,
-            address: address || null,
-            phone: phone || null,
-            email: email || null,
-            website: website || null,
-            academic_year: academic_year || null,
-            description: description || null,
-          })
-          .eq('id', existing.id);
-
-        if (error) {
-          console.error('[setup] Error updating institution:', error);
-          return NextResponse.json({ error: 'فشل في تحديث بيانات المؤسسة' }, { status: 500 });
-        }
-
-        return NextResponse.json({ success: true, action: 'updated', via: 'direct' });
-      }
-
-      // Insert new
-      const { error: insertError } = await supabaseServer
-        .from('institution_settings')
-        .insert({
+        // Build update object, only include tagline if the column exists
+        const updateObj: Record<string, unknown> = {
           name,
           name_en: nameEn || null,
           type,
@@ -198,7 +186,70 @@ export async function POST(request: NextRequest) {
           website: website || null,
           academic_year: academic_year || null,
           description: description || null,
-        });
+        };
+
+        // Try to include tagline in the update; if the column doesn't exist yet,
+        // the error will be caught and we retry without it
+        if (tagline !== undefined) {
+          updateObj.tagline = tagline || null;
+        }
+
+        let { error } = await supabaseServer
+          .from('institution_settings')
+          .update(updateObj)
+          .eq('id', existing.id);
+
+        // If tagline column doesn't exist, retry without it
+        if (error && tagline !== undefined && error.message?.includes('tagline')) {
+          delete updateObj.tagline;
+          const retryResult = await supabaseServer
+            .from('institution_settings')
+            .update(updateObj)
+            .eq('id', existing.id);
+          error = retryResult.error;
+        }
+
+        if (error) {
+          console.error('[setup] Error updating institution:', error);
+          return NextResponse.json({ error: 'فشل في تحديث بيانات المؤسسة' }, { status: 500 });
+        }
+
+        return NextResponse.json({ success: true, action: 'updated', via: 'direct' });
+      }
+
+      // Insert new
+      const insertObj: Record<string, unknown> = {
+        name,
+        name_en: nameEn || null,
+        type,
+        logo_url: logo_url || null,
+        country: country || null,
+        city: city || null,
+        address: address || null,
+        phone: phone || null,
+        email: email || null,
+        website: website || null,
+        academic_year: academic_year || null,
+        description: description || null,
+      };
+
+      // Try to include tagline; if column doesn't exist, retry without it
+      if (tagline !== undefined) {
+        insertObj.tagline = tagline || null;
+      }
+
+      let { error: insertError } = await supabaseServer
+        .from('institution_settings')
+        .insert(insertObj);
+
+      // If tagline column doesn't exist, retry without it
+      if (insertError && tagline !== undefined && insertError.message?.includes('tagline')) {
+        delete insertObj.tagline;
+        const retryResult = await supabaseServer
+          .from('institution_settings')
+          .insert(insertObj);
+        insertError = retryResult.error;
+      }
 
       if (insertError) {
         console.error('[setup] Error saving institution:', insertError);
@@ -239,6 +290,7 @@ CREATE TABLE IF NOT EXISTS institution_settings (
   name_en TEXT,
   type TEXT NOT NULL CHECK (type IN ('center', 'school', 'university')),
   logo_url TEXT,
+  tagline TEXT,
   country TEXT,
   city TEXT,
   address TEXT,
@@ -289,6 +341,7 @@ CREATE OR REPLACE FUNCTION setup_initialize_system(
   p_name_en TEXT DEFAULT NULL,
   p_type TEXT DEFAULT 'center',
   p_logo_url TEXT DEFAULT NULL,
+  p_tagline TEXT DEFAULT NULL,
   p_country TEXT DEFAULT NULL,
   p_city TEXT DEFAULT NULL,
   p_address TEXT DEFAULT NULL,
@@ -310,14 +363,14 @@ BEGIN
   IF v_existing_id IS NOT NULL THEN
     UPDATE institution_settings SET
       name = p_name, name_en = p_name_en, type = p_type,
-      logo_url = p_logo_url, country = p_country, city = p_city,
+      logo_url = p_logo_url, tagline = p_tagline, country = p_country, city = p_city,
       address = p_address, phone = p_phone, email = p_email,
       website = p_website, academic_year = p_academic_year, description = p_description
     WHERE id = v_existing_id;
     RETURN json_build_object('action', 'updated', 'id', v_existing_id);
   END IF;
-  INSERT INTO institution_settings (name, name_en, type, logo_url, country, city, address, phone, email, website, academic_year, description)
-  VALUES (p_name, p_name_en, p_type, p_logo_url, p_country, p_city, p_address, p_phone, p_email, p_website, p_academic_year, p_description)
+  INSERT INTO institution_settings (name, name_en, type, logo_url, tagline, country, city, address, phone, email, website, academic_year, description)
+  VALUES (p_name, p_name_en, p_type, p_logo_url, p_tagline, p_country, p_city, p_address, p_phone, p_email, p_website, p_academic_year, p_description)
   RETURNING id INTO v_id;
   RETURN json_build_object('action', 'created', 'id', v_id);
 END;

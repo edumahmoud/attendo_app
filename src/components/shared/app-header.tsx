@@ -312,8 +312,15 @@ function HeaderTitle() {
   }, [loaded, fetchInstitution]);
 
   return (
-    <h1 className="text-base sm:text-lg font-bold text-emerald-600 whitespace-nowrap truncate max-w-[180px] sm:max-w-[250px]">
-      {loaded ? (institution?.name || 'أتيندو') : '\u00A0'}
-    </h1>
+    <div className="flex flex-col min-w-0">
+      <h1 className="text-base sm:text-lg font-bold text-emerald-600 whitespace-nowrap truncate max-w-[180px] sm:max-w-[250px]">
+        {loaded ? (institution?.name || 'أتيندو') : '\u00A0'}
+      </h1>
+      {loaded && institution?.tagline && (
+        <span className="text-[10px] sm:text-xs text-emerald-600/60 whitespace-nowrap truncate max-w-[180px] sm:max-w-[250px] -mt-0.5">
+          {institution.tagline}
+        </span>
+      )}
+    </div>
   );
 }

@@ -10,6 +10,7 @@ export interface InstitutionData {
   name_en?: string | null;
   type: 'center' | 'school' | 'university';
   logo_url?: string | null;
+  tagline?: string | null;
   country?: string | null;
   city?: string | null;
   address?: string | null;

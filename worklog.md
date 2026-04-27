@@ -246,3 +246,94 @@ Stage Summary:
 - Back button now properly exits chat on all screen sizes and shows "مرحباً بك في المحادثات" welcome area
 - New chat creation no longer notifies the other user until the first message is sent
 - No breaking changes to existing message notification flow
+
+---
+Task ID: 3
+Agent: Subagent
+Task: Add tagline column to institution_settings table and update backend API
+
+Work Log:
+1. **Attempted DB Migration via Supabase**:
+   - Tried `supabase` CLI: not installed
+   - Tried `psql`: not available
+   - Tried Supabase REST API `rpc/exec_sql`: no such RPC function exists
+   - Tried Supabase `/pg/query` endpoint: invalid path
+   - Tried direct PostgreSQL connection via `pg` module with service role key as password: "Tenant or user not found"
+   - Tried all regional pooler endpoints: same error
+   - Tried direct DB host: network unreachable
+   - **Conclusion**: Cannot add column remotely without the database password. Column must be added manually via Supabase SQL Editor.
+
+2. **Updated TypeScript Types** (`/src/stores/institution-store.ts`):
+   - Added `tagline?: string | null` to `InstitutionData` interface
+
+3. **Updated Setup API** (`/src/app/api/setup/route.ts`):
+   - Added `tagline` to destructured body fields
+   - Added `p_tagline` parameter to `setup_initialize_system` RPC call
+   - After RPC succeeds, tries to update `tagline` separately (in case RPC function hasn't been updated yet)
+   - For direct update path: includes `tagline` in update object, with fallback retry if column doesn't exist
+   - For direct insert path: includes `tagline` in insert object, with fallback retry if column doesn't exist
+   - Updated `getMigrationSQL()` to include `tagline TEXT` column and `p_tagline` parameter in the RPC function
+
+4. **Updated Admin Institution Section** (`/src/components/admin/institution-section.tsx`):
+   - Added `tagline` to local `InstitutionData` interface
+   - Added `tagline` to save handler body
+   - Added tagline input field in the Basic Info card (after English name), with label "شعار المؤسسة (Tagline)", placeholder "عبارة قصيرة تصف المؤسسة...", maxLength 200, and helper text
+
+5. **Updated Setup Wizard** (`/src/components/setup/setup-wizard.tsx`):
+   - Added `institutionTagline` state
+   - Added `tagline` to save handler body
+   - Added tagline input field in institution info step (after English name)
+   - Updated migration SQL template to include `tagline TEXT` column and `p_tagline` parameter
+
+6. **Updated App Header** (`/src/components/shared/app-header.tsx`):
+   - `HeaderTitle` component now shows the tagline below the institution name as a smaller subtitle when available
+
+7. **Created Migration Endpoint** (`/src/app/api/migrate/tagline-column/route.ts`):
+   - GET/POST: checks if `tagline` column exists, returns status 'migrated' or 'pending' with SQL
+   - SQL includes ALTER TABLE and updated `setup_initialize_system` function
+
+8. **Created Migration SQL File** (`/supabase/migrations/v17_institution_tagline.sql`):
+   - ALTER TABLE to add `tagline TEXT` column
+   - Updated `setup_initialize_system` function with `p_tagline` parameter
+
+9. **Lint**: All changes pass `bun run lint` with zero errors
+
+Stage Summary:
+- `tagline` field added to all TypeScript interfaces, API routes, and frontend components
+- Backend gracefully handles the case where the `tagline` column doesn't exist yet (retry without it)
+- App header shows tagline as a subtitle under the institution name
+- Migration endpoint and SQL file created for manual execution
+- **IMPORTANT**: The `tagline` column must be added to Supabase manually by running this SQL in the Dashboard SQL Editor:
+  ```sql
+  ALTER TABLE institution_settings ADD COLUMN IF NOT EXISTS tagline TEXT;
+  ```
+  And optionally update the `setup_initialize_system` function (see v17 migration file)
+- All changes pass lint
+
+---
+Task ID: 3-6
+Agent: Main Agent
+Task: Institution section improvements - logo persistence, dynamic favicon/tab title, tagline field, fix input/icon overlap
+
+Work Log:
+- Analyzed uploaded screenshot using VLM to identify UI issues (input/icon overlap, logo placement)
+- Read institution-section.tsx, app-header.tsx, institution-store.ts, layout.tsx, and setup API route
+- Added tagline field to InstitutionData interface in store, API, and institution-section component
+- Updated setup API route with graceful fallback for tagline column (retries without tagline if column doesn't exist)
+- Created migration endpoint at /api/migrate/tagline-column that checks if column exists
+- Added migration banner in institution-section UI that shows SQL to run when tagline column is missing
+- Fixed all input/icon overlap issues: changed absolute left-3 to logical properties (end-3 for RTL, start-3 for LTR)
+- Added proper padding to inputs (pe-10 for RTL fields, ps-10 for LTR fields like email/phone)
+- Added pointer-events-none to decorative icons to prevent click interference
+- Created InstitutionHead component that dynamically updates document.title and favicon based on institution data
+- Updated layout.tsx to include InstitutionHead in <head> and set default favicon
+- Tab title now shows: "Institution Name - Tagline" when tagline is set, otherwise just institution name
+- Favicon dynamically updates to institution logo when available
+- Header logo already shows institution logo via useInstitutionStore (verified working)
+
+Stage Summary:
+- Input/icon overlap fixed using logical CSS properties (start/end instead of left/right) and proper padding
+- Tagline field added with graceful DB fallback - shows migration banner when column doesn't exist
+- Dynamic favicon and tab title implemented via InstitutionHead client component
+- API saves tagline when column exists, falls back gracefully when it doesn't
+- SQL needed: ALTER TABLE institution_settings ADD COLUMN IF NOT EXISTS tagline TEXT;

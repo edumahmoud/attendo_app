@@ -37,6 +37,7 @@ interface InstitutionData {
   name_en?: string | null;
   type: InstitutionType;
   logo_url?: string | null;
+  tagline?: string | null;
   country?: string | null;
   city?: string | null;
   address?: string | null;
@@ -78,6 +79,29 @@ export default function InstitutionSection({ profile }: InstitutionSectionProps)
     type: 'center',
   });
   const [originalData, setOriginalData] = useState<string>('');
+
+  // ─── Auto-migrate tagline column ───
+  const [taglineMigrationStatus, setTaglineMigrationStatus] = useState<'checking' | 'migrated' | 'pending' | 'error'>('checking');
+
+  useEffect(() => {
+    // Check if the tagline column exists in the database
+    const checkMigration = async () => {
+      try {
+        const res = await fetch('/api/migrate/tagline-column');
+        const data = await res.json();
+        if (data.status === 'migrated') {
+          setTaglineMigrationStatus('migrated');
+        } else if (data.status === 'pending') {
+          setTaglineMigrationStatus('pending');
+        } else {
+          setTaglineMigrationStatus('error');
+        }
+      } catch {
+        setTaglineMigrationStatus('error');
+      }
+    };
+    checkMigration();
+  }, []);
 
   // ─── Fetch institution data ───
   const fetchInstitution = useCallback(async () => {
@@ -185,6 +209,7 @@ export default function InstitutionSection({ profile }: InstitutionSectionProps)
           nameEn: institution.name_en?.trim() || null,
           type: institution.type,
           logo_url: institution.logo_url || null,
+          tagline: institution.tagline?.trim() || null,
           country: institution.country?.trim() || null,
           city: institution.city?.trim() || null,
           address: institution.address?.trim() || null,
@@ -252,6 +277,22 @@ export default function InstitutionSection({ profile }: InstitutionSectionProps)
             بيانات المؤسسة
           </h2>
           <p className="text-sm text-muted-foreground mt-0.5">إدارة بيانات وإعدادات المؤسسة التعليمية</p>
+
+          {/* Migration banner for tagline column */}
+          {taglineMigrationStatus === 'pending' && (
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-amber-800">تحديث قاعدة البيانات مطلوب</p>
+                <p className="text-[10px] text-amber-700 mt-0.5">
+                  لتتمكن من استخدام حقل "الوصف المختصر"، يرجى تنفيذ SQL التالي في محرر SQL بلوحة تحكم Supabase:
+                </p>
+                <code className="mt-1 block text-[10px] bg-amber-100/80 rounded p-1.5 font-mono text-amber-900 select-all">
+                  ALTER TABLE institution_settings ADD COLUMN IF NOT EXISTS tagline TEXT;
+                </code>
+              </div>
+            </div>
+          )}
         </div>
         {institution.name && (
           <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-xs">
@@ -447,10 +488,10 @@ export default function InstitutionSection({ profile }: InstitutionSectionProps)
                     placeholder={`اسم ال${institution.type === 'center' ? 'سنتر' : institution.type === 'school' ? 'مدرسة' : 'الجامعة'}`}
                     value={institution.name}
                     onChange={(e) => updateField('name', e.target.value)}
-                    className="h-10 text-sm"
+                    className="h-10 text-sm pe-10"
                     disabled={saving}
                   />
-                  <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Building2 className="absolute end-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                 </div>
               </div>
 
@@ -463,12 +504,30 @@ export default function InstitutionSection({ profile }: InstitutionSectionProps)
                     placeholder="Institution Name"
                     value={institution.name_en || ''}
                     onChange={(e) => updateField('name_en', e.target.value)}
-                    className="h-10 text-sm"
+                    className="h-10 text-sm ps-10"
                     dir="ltr"
                     disabled={saving}
                   />
-                  <FileText className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <FileText className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                 </div>
+              </div>
+
+              {/* Tagline */}
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">الوصف المختصر</Label>
+                <div className="relative">
+                  <Input
+                    type="text"
+                    placeholder="مثال: منصة تعليم ذكية"
+                    value={institution.tagline || ''}
+                    onChange={(e) => updateField('tagline', e.target.value)}
+                    className="h-10 text-sm pe-10"
+                    disabled={saving}
+                    maxLength={200}
+                  />
+                  <FileText className="absolute end-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                </div>
+                <p className="text-[10px] text-muted-foreground">عبارة وصفية تظهر في عنوان المتصفح بجانب اسم المؤسسة</p>
               </div>
 
               {/* Country + City */}
@@ -481,10 +540,10 @@ export default function InstitutionSection({ profile }: InstitutionSectionProps)
                       placeholder="الدولة"
                       value={institution.country || ''}
                       onChange={(e) => updateField('country', e.target.value)}
-                      className="h-10 text-sm"
+                      className="h-10 text-sm pe-10"
                       disabled={saving}
                     />
-                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <MapPin className="absolute end-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                   </div>
                 </div>
                 <div className="space-y-1.5">
@@ -538,11 +597,11 @@ export default function InstitutionSection({ profile }: InstitutionSectionProps)
                       placeholder="+966 5x xxx xxxx"
                       value={institution.phone || ''}
                       onChange={(e) => updateField('phone', e.target.value)}
-                      className="h-10 text-sm"
+                      className="h-10 text-sm ps-10"
                       dir="ltr"
                       disabled={saving}
                     />
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Phone className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                   </div>
                 </div>
                 <div className="space-y-1.5">
@@ -553,11 +612,11 @@ export default function InstitutionSection({ profile }: InstitutionSectionProps)
                       placeholder="info@institution.com"
                       value={institution.email || ''}
                       onChange={(e) => updateField('email', e.target.value)}
-                      className="h-10 text-sm"
+                      className="h-10 text-sm ps-10"
                       dir="ltr"
                       disabled={saving}
                     />
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Mail className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                   </div>
                 </div>
               </div>
@@ -572,11 +631,11 @@ export default function InstitutionSection({ profile }: InstitutionSectionProps)
                       placeholder="www.institution.com"
                       value={institution.website || ''}
                       onChange={(e) => updateField('website', e.target.value)}
-                      className="h-10 text-sm"
+                      className="h-10 text-sm ps-10"
                       dir="ltr"
                       disabled={saving}
                     />
-                    <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Globe className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                   </div>
                 </div>
                 <div className="space-y-1.5">
@@ -587,11 +646,11 @@ export default function InstitutionSection({ profile }: InstitutionSectionProps)
                       placeholder="2025/2026"
                       value={institution.academic_year || ''}
                       onChange={(e) => updateField('academic_year', e.target.value)}
-                      className="h-10 text-sm"
+                      className="h-10 text-sm ps-10"
                       dir="ltr"
                       disabled={saving}
                     />
-                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Calendar className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                   </div>
                 </div>
               </div>
@@ -635,7 +694,7 @@ export default function InstitutionSection({ profile }: InstitutionSectionProps)
                     <option value="Asia/Kolkata">مومباي (GMT+5:30)</option>
                     <option value="Australia/Sydney">سيدني (GMT+11)</option>
                   </select>
-                  <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <Globe className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                 </div>
               </div>
             </div>

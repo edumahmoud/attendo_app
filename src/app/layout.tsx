@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
+import InstitutionHead from "@/components/shared/institution-head";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,8 +15,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "أتيندو - منصة تعليمية ذكية",
+  title: "أتيندو",
   description: "منصة تعليمية ذكية مدعومة بالذكاء الاصطناعي للطلاب والمعلمين",
+  icons: {
+    icon: '/favicon.ico',
+  },
 };
 
 export default function RootLayout({
@@ -25,6 +29,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
+      <head>
+        <InstitutionHead />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
