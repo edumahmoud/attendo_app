@@ -945,12 +945,9 @@ export default function ChatSection({ profile, role }: ChatSectionProps) {
       if (data.conversation?.id) {
         const convId = data.conversation.id;
 
-        socket?.emit('notify-new-conversation', {
-          targetUserId: otherUser.id,
-          conversationId: convId,
-          fromUser: { id: profile.id, name: profile.name },
-          conversationType: 'individual',
-        });
+        // Don't notify the other user about the new conversation yet.
+        // The other user will only see this conversation when the first
+        // actual message is sent (via chat-notification socket event).
 
         joinRoom(convId);
 
@@ -1733,9 +1730,14 @@ export default function ChatSection({ profile, role }: ChatSectionProps) {
             <>
               {/* ─── Chat header ─── */}
               <div className="shrink-0 p-3 border-b bg-card flex items-center gap-3">
-                {/* Back button (all screen sizes) */}
+                {/* Back button (all screen sizes) - exits chat and shows welcome area */}
                 <button
-                  onClick={() => setShowChat(false)}
+                  onClick={() => {
+                    setShowChat(false);
+                    setActiveConvId(null);
+                    setActiveConvInfo(null);
+                    setMessages([]);
+                  }}
                   className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted transition-colors"
                 >
                   <ArrowRight className="h-4 w-4" />

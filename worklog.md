@@ -226,3 +226,23 @@ Stage Summary:
 - Chat deletion is now per-user (other side unaffected) using is_hidden flag
 - All changes pass `bun run lint` with zero errors
 - NOTE: is_hidden and is_archived columns need to be added to Supabase for full functionality
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix two chat issues: (1) Back button on large screens should exit chat and show welcome area, (2) First-time chat entry should not send notification to other user
+
+Work Log:
+- Read chat-section.tsx (2076 lines) to understand the chat architecture
+- Identified Issue 1: Back button only called setShowChat(false) without resetting activeConvId/activeConvInfo, so on desktop the chat content remained visible
+- Identified Issue 2: startIndividualChat emitted 'notify-new-conversation' socket event to other user, causing toast + conversation list refresh even without any messages
+- Fixed Issue 1: Updated back button onClick to also clear activeConvId, activeConvInfo, and messages state
+- Fixed Issue 2: Removed the 'notify-new-conversation' socket emit from startIndividualChat - other user will only see the conversation when the first actual message is sent (via chat-notification)
+- Verified socket service properly handles chat-notification for direct delivery to participants
+- Verified API route doesn't have server-side notification logic for conversation creation
+- Ran lint - passes cleanly
+
+Stage Summary:
+- Back button now properly exits chat on all screen sizes and shows "مرحباً بك في المحادثات" welcome area
+- New chat creation no longer notifies the other user until the first message is sent
+- No breaking changes to existing message notification flow
