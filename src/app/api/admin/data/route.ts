@@ -19,89 +19,66 @@ export async function GET(request: NextRequest) {
         console.error('[admin/data] Error fetching users:', JSON.stringify(usersError));
         errors.push(`users: ${usersError.message} (code: ${usersError.code})`);
       } else {
-        // Batch enrichment: get subject counts per teacher, student counts per teacher/student
-        const teacherIds = (users || [])
-          .filter((u: Record<string, unknown>) => u.role === 'teacher')
-          .map((u: Record<string, unknown>) => u.id as string);
-
-        const studentIds = (users || [])
-          .filter((u: Record<string, unknown>) => u.role === 'student')
-          .map((u: Record<string, unknown>) => u.id as string);
-
+        // Batch enrichment: get subject/student/teacher counts
         // Run batch queries in parallel
-        const [subjectsData, teacherLinksData, studentLinksData] = await Promise.all([
-          // Get all subjects for all teachers in one query
-          teacherIds.length > 0
-            ? supabaseServer
-                .from('subjects')
-                .select('teacher_id')
-                .in('teacher_id', teacherIds)
-            : { data: [], error: null },
-          // Get all teacher-student links for teachers in one query
-          teacherIds.length > 0
-            ? supabaseServer
-                .from('teacher_student_links')
-                .select('teacher_id')
-                .in('teacher_id', teacherIds)
-            : { data: [], error: null },
-          // Get all teacher-student links for students in one query
-          studentIds.length > 0
-            ? supabaseServer
-                .from('teacher_student_links')
-                .select('student_id, teacher_id')
-                .in('student_id', studentIds)
-            : { data: [], error: null },
+        const [subjectsData, subjectStudentsData] = await Promise.all([
+          // Get all subjects with teacher_id (for teacher subject count + student enrichment)
+          supabaseServer
+            .from('subjects')
+            .select('id, teacher_id'),
+          // Get all subject-student enrollments (for accurate student/teacher counts)
+          supabaseServer
+            .from('subject_students')
+            .select('subject_id, student_id'),
         ]);
 
-        // Build count maps
-        const subjectCountMap: Record<string, number> = {};
+        // ─── Build maps from subjects ───
+        // subjectId → teacherId
+        const subjectTeacherMap: Record<string, string> = {};
+        // teacherId → count of subjects
+        const teacherSubjectCountMap: Record<string, number> = {};
         if (subjectsData.data) {
           for (const row of subjectsData.data) {
-            subjectCountMap[row.teacher_id] = (subjectCountMap[row.teacher_id] || 0) + 1;
+            subjectTeacherMap[row.id] = row.teacher_id;
+            teacherSubjectCountMap[row.teacher_id] = (teacherSubjectCountMap[row.teacher_id] || 0) + 1;
           }
         }
 
-        const teacherStudentCountMap: Record<string, number> = {};
-        if (teacherLinksData.data) {
-          for (const row of teacherLinksData.data) {
-            teacherStudentCountMap[row.teacher_id] = (teacherStudentCountMap[row.teacher_id] || 0) + 1;
-          }
-        }
+        // ─── Build maps from subject_students ───
+        // teacherId → Set of unique studentIds
+        const teacherStudentsSetMap: Record<string, Set<string>> = {};
+        // studentId → Set of unique subjectIds
+        const studentSubjectsSetMap: Record<string, Set<string>> = {};
+        // studentId → Set of unique teacherIds
+        const studentTeachersSetMap: Record<string, Set<string>> = {};
 
-        const studentLinkCountMap: Record<string, number> = {};
-        const studentTeachersMap: Record<string, Set<string>> = {};
-        if (studentLinksData.data) {
-          for (const row of studentLinksData.data) {
-            studentLinkCountMap[row.student_id] = (studentLinkCountMap[row.student_id] || 0) + 1;
-            if (!studentTeachersMap[row.student_id]) {
-              studentTeachersMap[row.student_id] = new Set();
+        if (subjectStudentsData.data) {
+          for (const row of subjectStudentsData.data) {
+            const teacherId = subjectTeacherMap[row.subject_id];
+            if (teacherId) {
+              if (!teacherStudentsSetMap[teacherId]) teacherStudentsSetMap[teacherId] = new Set();
+              teacherStudentsSetMap[teacherId].add(row.student_id);
             }
-            studentTeachersMap[row.student_id].add(row.teacher_id);
+            if (!studentSubjectsSetMap[row.student_id]) studentSubjectsSetMap[row.student_id] = new Set();
+            studentSubjectsSetMap[row.student_id].add(row.subject_id);
+            if (teacherId) {
+              if (!studentTeachersSetMap[row.student_id]) studentTeachersSetMap[row.student_id] = new Set();
+              studentTeachersSetMap[row.student_id].add(teacherId);
+            }
           }
-        }
-
-        // Calculate subject count for each student (subjects from their linked teachers)
-        const studentSubjectCountMap: Record<string, number> = {};
-        for (const [studentId, teacherIds] of Object.entries(studentTeachersMap)) {
-          let count = 0;
-          for (const tid of teacherIds) {
-            count += subjectCountMap[tid] || 0;
-          }
-          studentSubjectCountMap[studentId] = count;
         }
 
         // Merge counts into users
         const enrichedUsers = (users || []).map((u: Record<string, unknown>) => {
           const meta: Record<string, unknown> = { ...u };
+          const uid = u.id as string;
           if (u.role === 'teacher') {
-            meta.subjectCount = subjectCountMap[u.id as string] || 0;
-            meta.studentCount = teacherStudentCountMap[u.id as string] || 0;
+            meta.subjectCount = teacherSubjectCountMap[uid] || 0;
+            meta.studentCount = teacherStudentsSetMap[uid]?.size || 0;
           }
           if (u.role === 'student') {
-            meta.teacherCount = studentLinkCountMap[u.id as string] || 0;
-            meta.subjectCount = studentSubjectCountMap[u.id as string] || 0;
-            // Keep studentCount for backward compatibility (represents teacher links)
-            meta.studentCount = studentLinkCountMap[u.id as string] || 0;
+            meta.subjectCount = studentSubjectsSetMap[uid]?.size || 0;
+            meta.teacherCount = studentTeachersSetMap[uid]?.size || 0;
           }
           return meta;
         });

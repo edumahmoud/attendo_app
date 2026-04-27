@@ -1,6 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer, getSupabaseServerClient } from '@/lib/supabase-server';
 
+// ─── Schema detection cache ───
+// The banned_users table may or may not have enhanced columns
+// (ban_until, is_active, user_id, banned_by) depending on whether
+// the v15 migration has been applied. We detect once and cache.
+let _hasEnhancedSchema: boolean | null = null;
+
+async function hasEnhancedBanSchema(): Promise<boolean> {
+  if (_hasEnhancedSchema !== null) return _hasEnhancedSchema;
+
+  try {
+    const { error } = await supabaseServer
+      .from('banned_users')
+      .select('id, ban_until, is_active, user_id, banned_by')
+      .limit(1);
+
+    _hasEnhancedSchema = !error;
+  } catch {
+    _hasEnhancedSchema = false;
+  }
+
+  return _hasEnhancedSchema;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -83,68 +106,73 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if user already has an active ban
-    const { data: existingBan } = await supabaseServer
-      .from('banned_users')
-      .select('id, is_active')
-      .eq('email', userRecord.email)
-      .maybeSingle();
+    // Detect schema capabilities
+    const isEnhanced = await hasEnhancedBanSchema();
 
-    // Old schema: is_active doesn't exist (undefined), treat as active if record exists
-    const isExistingActive = existingBan && (existingBan.is_active === undefined || existingBan.is_active === true);
-
-    if (isExistingActive) {
-      // Update existing ban
-      const updateData: Record<string, unknown> = {
-        reason: reason || 'حظر بواسطة المشرف',
-        banned_by: bannedBy || null,
-        is_active: true,
-        user_id: userId,
-        banned_at: new Date().toISOString(),
-      };
-
-      if (banUntil) {
-        updateData.ban_until = banUntil;
-      } else {
-        // Permanent ban - clear ban_until
-        updateData.ban_until = null;
-      }
-
-      const { error } = await supabaseServer
+    if (isEnhanced) {
+      // ─── Enhanced schema: full ban with duration and status tracking ───
+      const { data: existingBan } = await supabaseServer
         .from('banned_users')
-        .update(updateData)
-        .eq('id', existingBan.id);
+        .select('id, is_active')
+        .eq('email', userRecord.email)
+        .maybeSingle();
 
-      if (error) {
-        console.error('Error updating ban:', error);
-        return NextResponse.json(
-          { success: false, error: 'حدث خطأ أثناء تحديث الحظر' },
-          { status: 500 }
-        );
-      }
-    } else {
-      // Create new ban record
-      const banData: Record<string, unknown> = {
-        email: userRecord.email,
-        user_id: userId,
-        reason: reason || 'حظر بواسطة المشرف',
-        banned_by: bannedBy || null,
-        is_active: true,
-      };
+      const isExistingActive = existingBan && (existingBan.is_active === undefined || existingBan.is_active === true);
 
-      if (banUntil) {
-        banData.ban_until = banUntil;
-      }
+      if (isExistingActive) {
+        // Update existing active ban
+        const updateData: Record<string, unknown> = {
+          reason: reason || 'حظر بواسطة المشرف',
+          banned_by: bannedBy || null,
+          is_active: true,
+          user_id: userId,
+          banned_at: new Date().toISOString(),
+        };
 
-      if (existingBan && !isExistingActive) {
-        // Reactivate existing inactive ban
+        if (banUntil) {
+          updateData.ban_until = banUntil;
+        } else {
+          updateData.ban_until = null;
+        }
+
         const { error } = await supabaseServer
           .from('banned_users')
-          .update(banData)
+          .update(updateData)
+          .eq('id', existingBan.id);
+
+        if (error) {
+          console.error('Error updating ban:', error);
+          // Reset schema cache in case schema changed
+          _hasEnhancedSchema = null;
+          return NextResponse.json(
+            { success: false, error: 'حدث خطأ أثناء تحديث الحظر' },
+            { status: 500 }
+          );
+        }
+      } else if (existingBan && !isExistingActive) {
+        // Reactivate existing inactive ban
+        const updateData: Record<string, unknown> = {
+          reason: reason || 'حظر بواسطة المشرف',
+          banned_by: bannedBy || null,
+          is_active: true,
+          user_id: userId,
+          banned_at: new Date().toISOString(),
+        };
+
+        if (banUntil) {
+          updateData.ban_until = banUntil;
+        } else {
+          updateData.ban_until = null;
+        }
+
+        const { error } = await supabaseServer
+          .from('banned_users')
+          .update(updateData)
           .eq('id', existingBan.id);
 
         if (error) {
           console.error('Error reactivating ban:', error);
+          _hasEnhancedSchema = null;
           return NextResponse.json(
             { success: false, error: 'حدث خطأ أثناء إعادة تفعيل الحظر' },
             { status: 500 }
@@ -152,17 +180,51 @@ export async function POST(request: NextRequest) {
         }
       } else {
         // Insert new ban
+        const banData: Record<string, unknown> = {
+          email: userRecord.email,
+          user_id: userId,
+          reason: reason || 'حظر بواسطة المشرف',
+          banned_by: bannedBy || null,
+          is_active: true,
+        };
+
+        if (banUntil) {
+          banData.ban_until = banUntil;
+        }
+
         const { error } = await supabaseServer
           .from('banned_users')
           .upsert(banData, { onConflict: 'email' });
 
         if (error) {
           console.error('Error banning user:', error);
+          _hasEnhancedSchema = null;
           return NextResponse.json(
             { success: false, error: 'حدث خطأ أثناء حظر المستخدم' },
             { status: 500 }
           );
         }
+      }
+    } else {
+      // ─── Basic schema: only email, reason, banned_at ───
+      const banData: Record<string, unknown> = {
+        email: userRecord.email,
+        reason: reason || 'حظر بواسطة المشرف',
+        banned_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabaseServer
+        .from('banned_users')
+        .upsert(banData, { onConflict: 'email' });
+
+      if (error) {
+        console.error('Error banning user (basic schema):', error);
+        // Reset schema cache in case schema changed
+        _hasEnhancedSchema = null;
+        return NextResponse.json(
+          { success: false, error: 'حدث خطأ أثناء حظر المستخدم' },
+          { status: 500 }
+        );
       }
     }
 

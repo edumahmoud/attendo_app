@@ -394,3 +394,59 @@ Stage Summary:
 - API now calculates subject counts for students via their linked teachers
 - Ban/delete operations have more robust error handling preventing infinite loading
 - All changes pass lint
+
+---
+Task ID: 12
+Agent: Main Agent
+Task: Fix "حدث خطأ أثناء حظر المستخدم" ban error + improve user card counts
+
+Work Log:
+1. **Diagnosed ban error**: Checked dev.log and found the exact error:
+   ```
+   Error banning user: {
+     code: 'PGRST204',
+     message: "Could not find the 'ban_until' column of 'banned_users' in the schema cache"
+   }
+   ```
+   The `banned_users` table was missing columns (`ban_until`, `is_active`, `user_id`, `banned_by`) defined in v15 migration SQL that was never applied to the database.
+
+2. **Fixed ban-user API route** (`/api/admin/ban-user/route.ts`):
+   - Added schema detection with caching (`_hasEnhancedSchema` variable)
+   - When enhanced schema exists: uses full ban features (temporary bans, status tracking, user_id linking)
+   - When basic schema exists: uses only `email`, `reason`, `banned_at` columns (always present)
+   - Schema cache resets on error (in case migration applied mid-session)
+
+3. **Fixed unban-user API route** (`/api/admin/unban-user/route.ts`):
+   - Same schema detection pattern
+   - Enhanced schema: deactivates ban (`is_active: false`) preserving history
+   - Basic schema: deletes the record entirely (no `is_active` column)
+
+4. **Created migration route** (`/api/migrate/enhanced-ban/route.ts`):
+   - GET: checks if enhanced columns exist, returns status
+   - POST: attempts to apply migration via Supabase Management API, falls back to providing SQL for manual execution
+
+5. **Improved admin data API** (`/api/admin/data/route.ts`):
+   - Replaced `teacher_student_links` queries with `subject_students` table for more accurate counts
+   - Now uses `subject_students` enrollments + `subjects` table to derive:
+     - Teacher: subjectCount (from subjects) + studentCount (unique students in their subjects)
+     - Student: subjectCount (enrolled subjects) + teacherCount (unique teachers from enrolled subjects)
+   - Reduced from 3 parallel queries to 2 parallel queries (removed teacher_student_links queries)
+   - Uses Set-based counting for accurate unique student/teacher counts
+
+Stage Summary:
+- Ban user now works with both basic and enhanced database schemas
+- Unban user works with both schemas (deactivates vs deletes)
+- Migration route created for adding enhanced ban columns
+- User card counts now derived from actual subject enrollments (subject_students) instead of teacher_student_links
+- All changes pass lint with zero errors
+- NOTE: Enhanced ban features (temporary bans, ban history) require running SQL in Supabase Dashboard:
+  ```sql
+  ALTER TABLE public.banned_users ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES public.users(id) ON DELETE SET NULL;
+  ALTER TABLE public.banned_users ADD COLUMN IF NOT EXISTS ban_until TIMESTAMPTZ;
+  ALTER TABLE public.banned_users ADD COLUMN IF NOT EXISTS banned_by UUID REFERENCES public.users(id) ON DELETE SET NULL;
+  ALTER TABLE public.banned_users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true NOT NULL;
+  CREATE INDEX IF NOT EXISTS idx_banned_users_user_id ON public.banned_users(user_id);
+  CREATE INDEX IF NOT EXISTS idx_banned_users_is_active ON public.banned_users(is_active);
+  CREATE INDEX IF NOT EXISTS idx_banned_users_ban_until ON public.banned_users(ban_until);
+  UPDATE public.banned_users SET is_active = true WHERE is_active IS NULL;
+  ```

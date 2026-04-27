@@ -1,6 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase-server';
 
+// ─── Schema detection cache ───
+let _hasEnhancedSchema: boolean | null = null;
+
+async function hasEnhancedBanSchema(): Promise<boolean> {
+  if (_hasEnhancedSchema !== null) return _hasEnhancedSchema;
+
+  try {
+    const { error } = await supabaseServer
+      .from('banned_users')
+      .select('id, is_active')
+      .limit(1);
+
+    _hasEnhancedSchema = !error;
+  } catch {
+    _hasEnhancedSchema = false;
+  }
+
+  return _hasEnhancedSchema;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -13,25 +33,52 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Deactivate the ban instead of deleting it (preserves history)
-    let query = supabaseServer
-      .from('banned_users')
-      .update({ is_active: false });
+    const isEnhanced = await hasEnhancedBanSchema();
 
-    if (banId) {
-      query = query.eq('id', banId);
+    if (isEnhanced) {
+      // Enhanced schema: deactivate the ban (preserves history)
+      let query = supabaseServer
+        .from('banned_users')
+        .update({ is_active: false });
+
+      if (banId) {
+        query = query.eq('id', banId);
+      } else {
+        query = query.eq('email', email);
+      }
+
+      const { error } = await query;
+
+      if (error) {
+        console.error('Error unbanning user:', error);
+        _hasEnhancedSchema = null;
+        return NextResponse.json(
+          { success: false, error: 'حدث خطأ أثناء إلغاء الحظر' },
+          { status: 500 }
+        );
+      }
     } else {
-      query = query.eq('email', email);
-    }
+      // Basic schema: delete the record entirely (no is_active column)
+      let query = supabaseServer
+        .from('banned_users')
+        .delete();
 
-    const { error } = await query;
+      if (banId) {
+        query = query.eq('id', banId);
+      } else {
+        query = query.eq('email', email);
+      }
 
-    if (error) {
-      console.error('Error unbanning user:', error);
-      return NextResponse.json(
-        { success: false, error: 'حدث خطأ أثناء إلغاء الحظر' },
-        { status: 500 }
-      );
+      const { error } = await query;
+
+      if (error) {
+        console.error('Error unbanning user (basic schema):', error);
+        _hasEnhancedSchema = null;
+        return NextResponse.json(
+          { success: false, error: 'حدث خطأ أثناء إلغاء الحظر' },
+          { status: 500 }
+        );
+      }
     }
 
     return NextResponse.json({ success: true });
